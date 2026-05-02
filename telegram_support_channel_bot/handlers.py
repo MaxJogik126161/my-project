@@ -3,15 +3,19 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import CommandStart
+from aiogram.exceptions import TelegramBadRequest
 
 from keyboards import (
     main_menu,
     back_to_menu,
     faq_menu,
     cancel_action,
-    admin_answer
+    admin_answer,
+    admin_panel,
+    admin_stats_menu,
 )
 from config import ADMIN_ID, CHANNEL_ID
+from stats import stats
 
 router = Router()
 
@@ -52,10 +56,15 @@ FAQ_ANSWERS = {
     ),
 }
 
+def is_admin(user_id: int) -> bool:
+    return user_id == ADMIN_ID
+
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
     user_name = message.from_user.first_name
+    admin = is_admin(message.from_user.id)
+
     await message.answer(
         text=(
             f"👋 Привет, <b>{user_name}</b>!\n\n"
@@ -67,25 +76,33 @@ async def start_handler(message: Message, state: FSMContext) -> None:
             "🐛 Сообщить об ошибке\n\n"
             "Выбери нужный раздел 👇"
         ),
-        reply_markup=main_menu(),
+        reply_markup=main_menu(is_admin=admin),
         parse_mode="HTML"
     )
 
 @router.callback_query(F.data == "main_menu")
-async def callback_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
+async def callback_main_menu(
+    callback: CallbackQuery,
+    state: FSMContext
+) -> None:
     await state.clear()
+    admin = is_admin(callback.from_user.id)
+
     await callback.message.edit_text(
         text=(
             "🏠 <b>Главное меню</b>\n\n"
             "Выбери нужный раздел 👇"
         ),
-        reply_markup=main_menu(),
+        reply_markup=main_menu(is_admin=admin),
         parse_mode="HTML"
     )
     await callback.answer()
 
 @router.callback_query(F.data == "ask_question")
-async def callback_ask_question(callback: CallbackQuery, state: FSMContext) -> None:
+async def callback_ask_question(
+    callback: CallbackQuery,
+    state: FSMContext
+) -> None:
     await state.set_state(UserStates.waiting_question)
     await callback.message.edit_text(
         text=(
@@ -100,18 +117,25 @@ async def callback_ask_question(callback: CallbackQuery, state: FSMContext) -> N
     await callback.answer()
 
 @router.message(UserStates.waiting_question)
-async def process_question(message: Message, state: FSMContext, bot: Bot) -> None:
+async def process_question(
+    message: Message,
+    state: FSMContext,
+    bot: Bot
+) -> None:
     user = message.from_user
-    question_text = message.text
+
+    stats.add_question()
 
     await bot.send_message(
         chat_id=ADMIN_ID,
         text=(
             "📨 <b>Новый вопрос от пользователя!</b>\n\n"
-            f"👤 Пользователь: <a href='tg://user?id={user.id}'>{user.full_name}</a>\n"
+            f"👤 Пользователь: "
+            f"<a href='tg://user?id={user.id}'>{user.full_name}</a>\n"
             f"🆔 ID: <code>{user.id}</code>\n"
-            f"📝 Username: @{user.username if user.username else 'нет'}\n\n"
-            f"❓ <b>Вопрос:</b>\n{question_text}"
+            f"📝 Username: "
+            f"@{user.username if user.username else 'нет'}\n\n"
+            f"❓ <b>Вопрос:</b>\n{message.text}"
         ),
         reply_markup=admin_answer(user.id),
         parse_mode="HTML"
@@ -129,7 +153,10 @@ async def process_question(message: Message, state: FSMContext, bot: Bot) -> Non
     )
 
 @router.callback_query(F.data == "suggest_idea")
-async def callback_suggest_idea(callback: CallbackQuery, state: FSMContext) -> None:
+async def callback_suggest_idea(
+    callback: CallbackQuery,
+    state: FSMContext
+) -> None:
     await state.set_state(UserStates.waiting_idea)
     await callback.message.edit_text(
         text=(
@@ -144,18 +171,25 @@ async def callback_suggest_idea(callback: CallbackQuery, state: FSMContext) -> N
     await callback.answer()
 
 @router.message(UserStates.waiting_idea)
-async def process_idea(message: Message, state: FSMContext, bot: Bot) -> None:
+async def process_idea(
+    message: Message,
+    state: FSMContext,
+    bot: Bot
+) -> None:
     user = message.from_user
-    idea_text = message.text
+
+    stats.add_idea()
 
     await bot.send_message(
         chat_id=ADMIN_ID,
         text=(
             "💡 <b>Новая идея от пользователя!</b>\n\n"
-            f"👤 Пользователь: <a href='tg://user?id={user.id}'>{user.full_name}</a>\n"
+            f"👤 Пользователь: "
+            f"<a href='tg://user?id={user.id}'>{user.full_name}</a>\n"
             f"🆔 ID: <code>{user.id}</code>\n"
-            f"📝 Username: @{user.username if user.username else 'нет'}\n\n"
-            f"💡 <b>Идея:</b>\n{idea_text}"
+            f"📝 Username: "
+            f"@{user.username if user.username else 'нет'}\n\n"
+            f"💡 <b>Идея:</b>\n{message.text}"
         ),
         parse_mode="HTML"
     )
@@ -172,7 +206,10 @@ async def process_idea(message: Message, state: FSMContext, bot: Bot) -> None:
     )
 
 @router.callback_query(F.data == "report_bug")
-async def callback_report_bug(callback: CallbackQuery, state: FSMContext) -> None:
+async def callback_report_bug(
+    callback: CallbackQuery,
+    state: FSMContext
+) -> None:
     await state.set_state(UserStates.waiting_bug)
     await callback.message.edit_text(
         text=(
@@ -189,18 +226,25 @@ async def callback_report_bug(callback: CallbackQuery, state: FSMContext) -> Non
     await callback.answer()
 
 @router.message(UserStates.waiting_bug)
-async def process_bug(message: Message, state: FSMContext, bot: Bot) -> None:
+async def process_bug(
+    message: Message,
+    state: FSMContext,
+    bot: Bot
+) -> None:
     user = message.from_user
-    bug_text = message.text
+
+    stats.add_bug()
 
     await bot.send_message(
         chat_id=ADMIN_ID,
         text=(
             "🐛 <b>Новый баг-репорт!</b>\n\n"
-            f"👤 Пользователь: <a href='tg://user?id={user.id}'>{user.full_name}</a>\n"
+            f"👤 Пользователь: "
+            f"<a href='tg://user?id={user.id}'>{user.full_name}</a>\n"
             f"🆔 ID: <code>{user.id}</code>\n"
-            f"📝 Username: @{user.username if user.username else 'нет'}\n\n"
-            f"🐛 <b>Описание ошибки:</b>\n{bug_text}"
+            f"📝 Username: "
+            f"@{user.username if user.username else 'нет'}\n\n"
+            f"🐛 <b>Описание ошибки:</b>\n{message.text}"
         ),
         parse_mode="HTML"
     )
@@ -239,8 +283,11 @@ async def callback_faq_answer(callback: CallbackQuery) -> None:
     await callback.answer()
 
 @router.callback_query(F.data.startswith("answer_"))
-async def callback_admin_answer(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.from_user.id != ADMIN_ID:
+async def callback_admin_answer(
+    callback: CallbackQuery,
+    state: FSMContext
+) -> None:
+    if not is_admin(callback.from_user.id):
         await callback.answer("⛔ У вас нет доступа!", show_alert=True)
         return
 
@@ -250,15 +297,23 @@ async def callback_admin_answer(callback: CallbackQuery, state: FSMContext) -> N
 
     await callback.message.answer(
         text=(
-            f"✉️ <b>Ответ пользователю</b> <code>{user_id}</code>\n\n"
+            f"✉️ <b>Ответ пользователю</b> "
+            f"<code>{user_id}</code>\n\n"
             "Напишите ответ в следующем сообщении:"
         ),
         parse_mode="HTML"
     )
     await callback.answer()
 
-@router.message(UserStates.waiting_admin_answer, F.from_user.id == ADMIN_ID)
-async def process_admin_answer(message: Message, state: FSMContext, bot: Bot) -> None:
+@router.message(
+    UserStates.waiting_admin_answer,
+    F.from_user.id == ADMIN_ID
+)
+async def process_admin_answer(
+    message: Message,
+    state: FSMContext,
+    bot: Bot
+) -> None:
     data = await state.get_data()
     user_id = data.get("reply_to_user")
 
@@ -278,6 +333,58 @@ async def process_admin_answer(message: Message, state: FSMContext, bot: Bot) ->
         )
     except Exception as error:
         await message.answer(
-            text=f"❌ <b>Ошибка отправки:</b> <code>{error}</code>",
+            text=(
+                f"❌ <b>Ошибка отправки:</b> "
+                f"<code>{error}</code>"
+            ),
             parse_mode="HTML"
         )
+
+@router.callback_query(F.data == "admin_panel")
+async def callback_admin_panel(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ У вас нет доступа!", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        text=(
+            "⚙️ <b>Админ-панель</b>\n\n"
+            "Управление ботом поддержки канала.\n"
+            "Выберите нужный раздел 👇"
+        ),
+        reply_markup=admin_panel(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_stats")
+async def callback_admin_stats(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ У вас нет доступа!", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        text=stats.format_stats(),
+        reply_markup=admin_stats_menu(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_stats_refresh")
+async def callback_admin_stats_refresh(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ У вас нет доступа!", show_alert=True)
+        return
+
+    try:
+        await callback.message.edit_text(
+            text=stats.format_stats(),
+            reply_markup=admin_stats_menu(),
+            parse_mode="HTML"
+        )
+        await callback.answer("✅ Статистика обновлена!")
+    except TelegramBadRequest as error:
+        if "message is not modified" in str(error):
+            await callback.answer("📊 Статистика актуальна, новых обращений нет!")
+        else:
+            raise

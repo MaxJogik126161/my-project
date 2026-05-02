@@ -22,9 +22,7 @@ async def main() -> None:
     )
 
     storage = MemoryStorage()
-
     dp = Dispatcher(storage=storage)
-
     dp.include_router(router)
 
     logger.info("Бот запущен!")

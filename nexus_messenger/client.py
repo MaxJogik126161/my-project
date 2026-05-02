@@ -1,9 +1,8 @@
 import socket
 import threading
 import json
-import time
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import messagebox
 from datetime import datetime
 import sys
 
@@ -103,6 +102,79 @@ class NexusClient:
         except Exception:
             pass
 
+class TitleNotifier:
+    BLINK_INTERVAL = 600
+    MAX_BLINKS     = 999
+
+    def __init__(self, root, base_title):
+        self.root        = root
+        self.base_title  = base_title
+        self._blinking   = False
+        self._blink_job  = None
+        self._blink_state = False
+        self._pending    = 0
+
+        self.root.bind("<FocusIn>",  self._on_focus_in)
+        self.root.bind("<FocusOut>", self._on_focus_out)
+
+        self._focused = True
+
+    def notify(self, text="💬 Новое сообщение"):
+        if self._focused:
+            return
+
+        self._pending += 1
+        self._alt_title = f"({self._pending}) {text}"
+
+        if not self._blinking:
+            self._blinking = True
+            self._blink_state = False
+            self._do_blink()
+
+    def notify_pm(self, sender):
+        self.notify(f"🔒 ЛС от {sender}")
+
+    def stop(self):
+        self._stop_blink()
+
+    def update_base_title(self, title):
+        self.base_title = title
+        if not self._blinking:
+            self.root.title(title)
+
+    def _do_blink(self):
+        if not self._blinking:
+            return
+
+        if self._blink_state:
+            self.root.title(self.base_title)
+        else:
+            self.root.title(self._alt_title)
+
+        self._blink_state = not self._blink_state
+        self._blink_job = self.root.after(
+            self.BLINK_INTERVAL, self._do_blink
+        )
+
+    def _stop_blink(self):
+        self._blinking   = False
+        self._blink_state = False
+        self._pending    = 0
+        if self._blink_job is not None:
+            try:
+                self.root.after_cancel(self._blink_job)
+            except Exception:
+                pass
+            self._blink_job = None
+        self.root.title(self.base_title)
+
+    def _on_focus_in(self, event):
+        self._focused = True
+        self._stop_blink()
+
+    def _on_focus_out(self, event):
+        self._focused = False
+
 class EmojiPicker:
     EMOJIS = [
         "😀","😁","😂","🤣","😃","😄","😅","😆",
@@ -180,23 +252,23 @@ class EmojiPicker:
     ]
 
     CATEGORIES = [
-        ("😀 Смайлы",    0,   88),
-        ("👋 Жесты",     88,  120),
-        ("❤ Сердца",    120, 144),
-        ("🌸 Природа",   144, 216),
-        ("🍎 Еда",       216, 312),
-        ("⚽ Активность",312, 392),
-        ("🚗 Транспорт", 392, 440),
-        ("💡 Объекты",   440, 512),
-        ("✅ Символы",   512, 999),
+        ("😀 Смайлы",     0,   88),
+        ("👋 Жесты",      88,  120),
+        ("❤ Сердца",     120, 144),
+        ("🌸 Природа",    144, 216),
+        ("🍎 Еда",        216, 312),
+        ("⚽ Активность", 312, 392),
+        ("🚗 Транспорт",  392, 440),
+        ("💡 Объекты",    440, 512),
+        ("✅ Символы",    512, 999),
     ]
 
     def __init__(self, parent, on_select):
-        self.on_select = on_select
-        self.win = None
-        self.parent = parent
+        self.on_select   = on_select
+        self.win         = None
+        self.parent      = parent
         self.current_category = 0
-        self.search_var = tk.StringVar()
+        self.search_var  = tk.StringVar()
         self.search_var.trace_add("write", self._on_search)
 
     def toggle(self, anchor_widget):
@@ -220,7 +292,6 @@ class EmojiPicker:
         self.win.geometry(f"420x360+{x}+{y}")
 
         self._build_picker()
-
         self.win.bind("<FocusOut>", self._on_focus_out)
         self.win.focus_set()
 
@@ -296,7 +367,6 @@ class EmojiPicker:
             bg=config.SCROLLBAR_BG
         )
         canvas.configure(yscrollcommand=scrollbar.set)
-
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -330,15 +400,12 @@ class EmojiPicker:
     def _select_category(self, idx):
         self.current_category = idx
         for i, btn in enumerate(self.cat_buttons):
-            if i == idx:
-                btn.config(bg=config.BG_LIGHT)
-            else:
-                btn.config(bg=config.BG_DARK)
-
+            btn.config(
+                bg=config.BG_LIGHT if i == idx else config.BG_DARK
+            )
         self.search_var.set("")
         name, start, end = self.CATEGORIES[idx]
-        emojis = self.EMOJIS[start:end]
-        self._fill_grid(emojis)
+        self._fill_grid(self.EMOJIS[start:end])
 
     def _on_search(self, *args):
         query = self.search_var.get().strip()
@@ -365,8 +432,7 @@ class EmojiPicker:
                 activebackground=config.BG_LIGHT,
                 relief=tk.FLAT,
                 font=("Segoe UI Emoji", 15),
-                width=2,
-                pady=2,
+                width=2, pady=2,
                 command=lambda e=emoji: self._pick(e)
             )
             btn.grid(row=row, column=col, padx=1, pady=1)
@@ -421,7 +487,7 @@ class LoginWindow:
         ).pack(pady=(25, 0))
 
         tk.Label(
-            self.win, text="Messenger v0.2",
+            self.win, text="Messenger v0.3",
             bg=config.BG_DARK, fg=config.TEXT_MUTED,
             font=("Consolas", 10)
         ).pack()
@@ -440,8 +506,7 @@ class LoginWindow:
             insertbackground=config.TEXT_PRIMARY,
             font=("Consolas", 12),
             relief=tk.FLAT,
-            width=24,
-            bd=6
+            width=24, bd=6
         )
         entry.pack()
         entry.focus()
@@ -485,19 +550,23 @@ class LoginWindow:
 
 class ChatWindow:
     def __init__(self, root, username, client):
-        self.root = root
-        self.username = username
-        self.client = client
+        self.root          = root
+        self.username      = username
+        self.client        = client
         self.private_target = None
-        self.message_count = 0
-        self.emoji_picker = None
+        self.message_count  = 0
+        self.emoji_picker   = None
 
-        self.root.title(f"Nexus Messenger — {username}")
+        self._base_title = f"Nexus Messenger — {username}"
+        self.root.title(self._base_title)
         self.root.geometry("900x620")
         self.root.configure(bg=config.BG_DARK)
         self.root.minsize(700, 450)
 
         self._build_ui()
+
+        self.notifier = TitleNotifier(self.root, self._base_title)
+
         self._sys_msg(f"✅ Подключён как {username}")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -557,8 +626,7 @@ class ChatWindow:
             selectbackground=config.ACCENT,
             selectforeground="white",
             font=("Consolas", 10),
-            relief=tk.FLAT,
-            border=0,
+            relief=tk.FLAT, border=0,
             activestyle="none"
         )
         self.users_list.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
@@ -659,8 +727,7 @@ class ChatWindow:
             bg=config.INPUT_BG, fg=config.TEXT_PRIMARY,
             insertbackground=config.TEXT_PRIMARY,
             font=("Consolas", 12),
-            relief=tk.FLAT,
-            bd=8
+            relief=tk.FLAT, bd=8
         )
         self.input_entry.pack(
             side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8)
@@ -706,15 +773,14 @@ class ChatWindow:
     def _insert_emoji(self, emoji):
         pos = self.input_entry.index(tk.INSERT)
         current = self.input_var.get()
-        new_text = current[:pos] + emoji + current[pos:]
-        self.input_var.set(new_text)
+        self.input_var.set(current[:pos] + emoji + current[pos:])
         self.input_entry.icursor(pos + len(emoji))
         self.input_entry.focus()
 
     def add_message(self, pkt):
-        uname = pkt.get("username", "?")
-        text = pkt.get("text", "")
-        ts = pkt.get("time", "")
+        uname  = pkt.get("username", "?")
+        text   = pkt.get("text", "")
+        ts     = pkt.get("time", "")
         is_own = (uname == self.username)
 
         self.chat_box.config(state=tk.NORMAL)
@@ -737,11 +803,14 @@ class ChatWindow:
         self.message_count += 1
         self.status_var.set(f"Сообщений получено: {self.message_count}")
 
+        if not is_own:
+            self.notifier.notify(f"💬 {uname}: {text[:30]}")
+
     def add_private(self, pkt):
-        frm = pkt.get("from", "?")
-        to = pkt.get("to", "?")
+        frm  = pkt.get("from", "?")
+        to   = pkt.get("to", "?")
         text = pkt.get("text", "")
-        ts = pkt.get("time", "")
+        ts   = pkt.get("time", "")
 
         self.chat_box.config(state=tk.NORMAL)
         self.chat_box.insert(tk.END, "\n")
@@ -757,6 +826,9 @@ class ChatWindow:
         self.chat_box.insert(tk.END, f"  {text}\n", "private_msg")
         self.chat_box.config(state=tk.DISABLED)
         self.chat_box.see(tk.END)
+
+        if frm != self.username:
+            self.notifier.notify_pm(frm)
 
     def _sys_msg(self, text):
         self.chat_box.config(state=tk.NORMAL)
@@ -820,8 +892,10 @@ class ChatWindow:
         self.conn_lbl.config(text=" Отключён")
         self.status_var.set("Соединение потеряно")
         self.input_entry.config(state=tk.DISABLED)
+        self.notifier.stop()
 
     def _on_close(self):
+        self.notifier.stop()
         if self.emoji_picker:
             self.emoji_picker._close()
         self.client.disconnect()
@@ -829,10 +903,10 @@ class ChatWindow:
 
 class NexusApp:
     def __init__(self):
-        self.root = tk.Tk()
+        self.root      = tk.Tk()
         self.root.withdraw()
-        self.client = None
-        self.chat_win = None
+        self.client    = None
+        self.chat_win  = None
         self._show_login()
         self.root.mainloop()
 
@@ -842,15 +916,14 @@ class NexusApp:
 
     def _on_login(self, username):
         self.client = NexusClient(
-            on_message=self._on_message,
-            on_system=self._on_system,
-            on_userlist=self._on_userlist,
-            on_connect=self._on_connect,
-            on_disconnect=self._on_disconnect,
-            on_error=self._on_error,
-            on_private=self._on_private
+            on_message    = self._on_message,
+            on_system     = self._on_system,
+            on_userlist   = self._on_userlist,
+            on_connect    = self._on_connect,
+            on_disconnect = self._on_disconnect,
+            on_error      = self._on_error,
+            on_private    = self._on_private
         )
-
         try:
             self.client.connect(username)
         except Exception as e:
@@ -868,13 +941,14 @@ class NexusApp:
             self.chat_win = ChatWindow(
                 self.root, self.client.username, self.client
             )
-            users = data.get("users", [])
-            self.chat_win.update_users(users)
+            self.chat_win.update_users(data.get("users", []))
         self.root.after(0, _do)
 
     def _on_message(self, pkt):
         if self.chat_win:
-            self.root.after(0, lambda: self.chat_win.add_message(pkt))
+            self.root.after(
+                0, lambda: self.chat_win.add_message(pkt)
+            )
 
     def _on_system(self, pkt):
         if self.chat_win:

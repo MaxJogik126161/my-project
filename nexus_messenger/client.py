@@ -103,6 +103,305 @@ class NexusClient:
         except Exception:
             pass
 
+class EmojiPicker:
+    EMOJIS = [
+        "😀","😁","😂","🤣","😃","😄","😅","😆",
+        "😇","😈","😉","😊","😋","😌","😍","😎",
+        "😏","😐","😑","😒","😓","😔","😕","😖",
+        "😗","😘","😙","😚","😛","😜","😝","😞",
+        "😟","😠","😡","😢","😣","😤","😥","😦",
+        "😧","😨","😩","😪","😫","😬","😭","😮",
+        "😯","😰","😱","😲","😳","😴","😵","😶",
+        "😷","🤒","🤓","🤔","🤕","🤗","🤠","🤡",
+        "🤢","🤣","🤤","🤥","🤧","🤨","🤩","🤪",
+        "🤫","🤬","🤭","🤮","🤯","🥰","🥱","🥲",
+        "🥳","🥴","🥵","🥶","🥸","🧐","🫠","🫡",
+        "👋","🤚","🖐","✋","🖖","👌","🤌","🤏",
+        "✌","🤞","🤟","🤘","🤙","👈","👉","👆",
+        "🖕","👇","☝","👍","👎","✊","👊","🤛",
+        "🤜","👏","🙌","👐","🤲","🤝","🙏","💪",
+        "🦾","🦿","🦵","🦶","👂","🦻","👃","🫀",
+        "❤","🧡","💛","💚","💙","💜","🖤","🤍",
+        "🤎","💔","❣","💕","💞","💓","💗","💖",
+        "💘","💝","💟","☮","✝","☪","🕉","✡",
+        "🔯","🕎","☯","☦","🛐","⛎","♈","♉",
+        "🌸","🌺","🌻","🌹","🥀","🌷","🌱","🌿",
+        "☘","🍀","🎋","🎍","🍃","🍂","🍁","🍄",
+        "🌾","💐","🌵","🎄","🌲","🌳","🌴","🌞",
+        "🌝","🌛","🌜","🌚","🌕","🌖","🌗","🌘",
+        "🌑","🌒","🌓","🌔","🌙","🌟","⭐","🌠",
+        "☁","⛅","🌤","🌥","🌦","🌧","⛈","🌩",
+        "🌨","❄","☃","⛄","🌬","💨","🌪","🌫",
+        "🌈","☔","⚡","❄","🔥","💧","🌊","🌀",
+        "🍎","🍊","🍋","🍇","🍓","🍒","🍑","🥭",
+        "🍍","🥥","🥝","🍅","🫑","🥦","🥬","🥒",
+        "🌶","🫒","🧄","🧅","🥔","🍠","🥐","🥖",
+        "🍞","🥨","🧀","🥚","🍳","🥞","🧇","🥓",
+        "🍔","🍟","🌭","🌮","🌯","🥙","🧆","🥚",
+        "🍕","🥗","🥘","🫕","🍝","🍜","🍲","🍛",
+        "🍣","🍱","🥟","🦪","🍤","🍙","🍚","🍘",
+        "🍥","🥮","🍡","🧁","🎂","🍰","🍮","🍭",
+        "🍬","🍫","🍿","🍩","🍪","🌰","🥜","🍯",
+        "🧃","🥤","🧋","☕","🫖","🍵","🧉","🍺",
+        "🍻","🥂","🍷","🥃","🍸","🍹","🍾","🫗",
+        "⚽","🏀","🏈","⚾","🥎","🏐","🏉","🥏",
+        "🎾","🏸","🏒","🏑","🥍","🏏","🪃","🥅",
+        "⛳","🪁","🏹","🎣","🤿","🥊","🥋","🎽",
+        "🛹","🛼","🛷","⛸","🥌","🎿","⛷","🏂",
+        "🪂","🏋","🤼","🤸","🤺","🏇","⛹","🤾",
+        "🏌","🏄","🚣","🧘","🧗","🚵","🚴","🏆",
+        "🥇","🥈","🥉","🏅","🎖","🎗","🎫","🎟",
+        "🎪","🤹","🎭","🩰","🎨","🎬","🎤","🎧",
+        "🎼","🎹","🥁","🪘","🎷","🎺","🎸","🪕",
+        "🎻","🎲","♟","🎯","🎳","🎮","🎰","🧩",
+        "🚗","🚕","🚙","🚌","🚎","🏎","🚓","🚑",
+        "🚒","🚐","🛻","🚚","🚛","🚜","🏍","🛵",
+        "🛺","🚲","🛴","🛹","🛼","🚏","🛣","🛤",
+        "⛽","🚨","🚥","🚦","🛑","🚧","⚓","🛟",
+        "⛵","🚤","🛥","🛳","⛴","🚢","✈","🛩",
+        "🛫","🛬","🪂","💺","🚁","🚟","🚠","🚡",
+        "🛰","🚀","🛸","🪐","🌍","🌎","🌏","🗺",
+        "💡","🔦","🕯","🪔","💰","💴","💵","💶",
+        "💷","💸","💳","🪙","💹","📈","📉","📊",
+        "📋","📌","📍","✂","🗃","🗄","🗑","🔒",
+        "🔓","🔏","🔐","🔑","🗝","🔨","🪓","⛏",
+        "⚒","🛠","🗡","⚔","🛡","🪚","🔧","🪛",
+        "🔩","⚙","🗜","⚖","🦯","🔗","⛓","🪝",
+        "🧲","🪜","⚗","🧪","🧫","🧬","🔬","🔭",
+        "📡","💉","🩸","💊","🩹","🩺","🩻","🚪",
+        "🛏","🛋","🪑","🚽","🪠","🚿","🛁","🪤",
+        "✅","❎","🔴","🟠","🟡","🟢","🔵","🟣",
+        "⚫","⚪","🟤","🔶","🔷","🔸","🔹","🔺",
+        "🔻","💠","🔘","🔲","🔳","▪","▫","◾",
+        "◽","◼","◻","🟥","🟧","🟨","🟩","🟦",
+        "🟪","⬛","⬜","🟫","🔈","🔉","🔊","📢",
+        "📣","📯","🔔","🔕","🎵","🎶","💬","💭",
+        "🗯","♠","♥","♦","♣","🃏","🀄","🎴",
+    ]
+
+    CATEGORIES = [
+        ("😀 Смайлы",    0,   88),
+        ("👋 Жесты",     88,  120),
+        ("❤ Сердца",    120, 144),
+        ("🌸 Природа",   144, 216),
+        ("🍎 Еда",       216, 312),
+        ("⚽ Активность",312, 392),
+        ("🚗 Транспорт", 392, 440),
+        ("💡 Объекты",   440, 512),
+        ("✅ Символы",   512, 999),
+    ]
+
+    def __init__(self, parent, on_select):
+        self.on_select = on_select
+        self.win = None
+        self.parent = parent
+        self.current_category = 0
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", self._on_search)
+
+    def toggle(self, anchor_widget):
+        if self.win and self.win.winfo_exists():
+            self.win.destroy()
+            self.win = None
+            return
+        self._show(anchor_widget)
+
+    def _show(self, anchor):
+        self.win = tk.Toplevel()
+        self.win.overrideredirect(True)
+        self.win.attributes("-topmost", True)
+        self.win.configure(bg=config.BG_MEDIUM)
+
+        anchor.update_idletasks()
+        x = anchor.winfo_rootx()
+        y = anchor.winfo_rooty() - 370
+        if x < 0:
+            x = 0
+        self.win.geometry(f"420x360+{x}+{y}")
+
+        self._build_picker()
+
+        self.win.bind("<FocusOut>", self._on_focus_out)
+        self.win.focus_set()
+
+    def _build_picker(self):
+        hdr = tk.Frame(self.win, bg=config.BG_LIGHT, pady=4)
+        hdr.pack(fill=tk.X)
+
+        tk.Label(
+            hdr, text="😊 Выбор эмодзи",
+            bg=config.BG_LIGHT, fg=config.TEXT_PRIMARY,
+            font=("Consolas", 10, "bold")
+        ).pack(side=tk.LEFT, padx=10)
+
+        tk.Button(
+            hdr, text="✕",
+            bg=config.BG_LIGHT, fg=config.TEXT_MUTED,
+            font=("Consolas", 10),
+            relief=tk.FLAT, padx=6,
+            command=self._close
+        ).pack(side=tk.RIGHT, padx=4)
+
+        search_frame = tk.Frame(self.win, bg=config.BG_MEDIUM, pady=4)
+        search_frame.pack(fill=tk.X, padx=6)
+
+        tk.Label(
+            search_frame, text="🔍",
+            bg=config.BG_MEDIUM, fg=config.TEXT_MUTED,
+            font=("Consolas", 11)
+        ).pack(side=tk.LEFT, padx=(0, 4))
+
+        self.search_entry = tk.Entry(
+            search_frame,
+            textvariable=self.search_var,
+            bg=config.INPUT_BG, fg=config.TEXT_PRIMARY,
+            insertbackground=config.TEXT_PRIMARY,
+            font=("Consolas", 11),
+            relief=tk.FLAT, bd=4
+        )
+        self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.search_entry.focus()
+
+        self.cat_frame = tk.Frame(self.win, bg=config.BG_DARK)
+        self.cat_frame.pack(fill=tk.X)
+
+        self.cat_buttons = []
+        for i, (name, start, end) in enumerate(self.CATEGORIES):
+            icon = name.split()[0]
+            btn = tk.Button(
+                self.cat_frame,
+                text=icon,
+                bg=config.BG_DARK,
+                fg=config.TEXT_PRIMARY,
+                font=("Segoe UI Emoji", 13),
+                relief=tk.FLAT,
+                padx=4, pady=2,
+                command=lambda idx=i: self._select_category(idx)
+            )
+            btn.pack(side=tk.LEFT, padx=1, pady=2)
+            self.cat_buttons.append(btn)
+
+        grid_outer = tk.Frame(self.win, bg=config.BG_MEDIUM)
+        grid_outer.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        canvas = tk.Canvas(
+            grid_outer,
+            bg=config.BG_MEDIUM,
+            highlightthickness=0
+        )
+        scrollbar = tk.Scrollbar(
+            grid_outer,
+            orient=tk.VERTICAL,
+            command=canvas.yview,
+            bg=config.SCROLLBAR_BG
+        )
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.grid_frame = tk.Frame(canvas, bg=config.BG_MEDIUM)
+        self.grid_window = canvas.create_window(
+            (0, 0), window=self.grid_frame, anchor=tk.NW
+        )
+
+        self.grid_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda e: canvas.itemconfig(
+                self.grid_window, width=e.width
+            )
+        )
+        canvas.bind_all(
+            "<MouseWheel>",
+            lambda e: canvas.yview_scroll(
+                int(-1 * (e.delta / 120)), "units"
+            )
+        )
+
+        self.canvas = canvas
+        self._select_category(0)
+
+    def _select_category(self, idx):
+        self.current_category = idx
+        for i, btn in enumerate(self.cat_buttons):
+            if i == idx:
+                btn.config(bg=config.BG_LIGHT)
+            else:
+                btn.config(bg=config.BG_DARK)
+
+        self.search_var.set("")
+        name, start, end = self.CATEGORIES[idx]
+        emojis = self.EMOJIS[start:end]
+        self._fill_grid(emojis)
+
+    def _on_search(self, *args):
+        query = self.search_var.get().strip()
+        if not query:
+            self._select_category(self.current_category)
+            return
+        filtered = [e for e in self.EMOJIS if query in e]
+        if not filtered:
+            filtered = self.EMOJIS
+        self._fill_grid(filtered)
+
+    def _fill_grid(self, emojis):
+        for widget in self.grid_frame.winfo_children():
+            widget.destroy()
+
+        cols = 10
+        for i, emoji in enumerate(emojis):
+            row = i // cols
+            col = i % cols
+            btn = tk.Button(
+                self.grid_frame,
+                text=emoji,
+                bg=config.BG_MEDIUM,
+                activebackground=config.BG_LIGHT,
+                relief=tk.FLAT,
+                font=("Segoe UI Emoji", 15),
+                width=2,
+                pady=2,
+                command=lambda e=emoji: self._pick(e)
+            )
+            btn.grid(row=row, column=col, padx=1, pady=1)
+            btn.bind(
+                "<Enter>",
+                lambda event, b=btn: b.config(bg=config.BG_LIGHT)
+            )
+            btn.bind(
+                "<Leave>",
+                lambda event, b=btn: b.config(bg=config.BG_MEDIUM)
+            )
+
+        self.canvas.yview_moveto(0)
+
+    def _pick(self, emoji):
+        self.on_select(emoji)
+
+    def _close(self):
+        if self.win and self.win.winfo_exists():
+            self.win.destroy()
+            self.win = None
+
+    def _on_focus_out(self, event):
+        if self.win:
+            self.win.after(150, self._check_focus)
+
+    def _check_focus(self):
+        try:
+            if self.win and self.win.winfo_exists():
+                focused = self.win.focus_get()
+                if focused is None:
+                    self._close()
+        except Exception:
+            pass
+
 class LoginWindow:
     def __init__(self, parent, on_login):
         self.on_login = on_login
@@ -122,7 +421,7 @@ class LoginWindow:
         ).pack(pady=(25, 0))
 
         tk.Label(
-            self.win, text="Messenger v0.1",
+            self.win, text="Messenger v0.2",
             bg=config.BG_DARK, fg=config.TEXT_MUTED,
             font=("Consolas", 10)
         ).pack()
@@ -191,6 +490,7 @@ class ChatWindow:
         self.client = client
         self.private_target = None
         self.message_count = 0
+        self.emoji_picker = None
 
         self.root.title(f"Nexus Messenger — {username}")
         self.root.geometry("900x620")
@@ -339,6 +639,19 @@ class ChatWindow:
         inp_row = tk.Frame(input_frame, bg=config.BG_MEDIUM)
         inp_row.pack(fill=tk.X)
 
+        self.emoji_btn = tk.Button(
+            inp_row,
+            text="😊",
+            bg=config.BG_LIGHT,
+            fg=config.TEXT_PRIMARY,
+            font=("Segoe UI Emoji", 14),
+            relief=tk.FLAT,
+            padx=6, pady=4,
+            activebackground=config.ACCENT,
+            command=self._toggle_emoji
+        )
+        self.emoji_btn.pack(side=tk.LEFT, padx=(5, 4))
+
         self.input_var = tk.StringVar()
         self.input_entry = tk.Entry(
             inp_row,
@@ -349,7 +662,9 @@ class ChatWindow:
             relief=tk.FLAT,
             bd=8
         )
-        self.input_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 8))
+        self.input_entry.pack(
+            side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8)
+        )
         self.input_entry.bind("<Return>", lambda e: self._send())
         self.input_entry.bind("<Escape>", lambda e: self._cancel_pm())
         self.input_entry.focus()
@@ -379,6 +694,22 @@ class ChatWindow:
             font=("Consolas", 8)
         )
         self.online_count.pack(side=tk.RIGHT, padx=10)
+
+        self.emoji_picker = EmojiPicker(
+            parent=self.input_entry,
+            on_select=self._insert_emoji
+        )
+
+    def _toggle_emoji(self):
+        self.emoji_picker.toggle(self.emoji_btn)
+
+    def _insert_emoji(self, emoji):
+        pos = self.input_entry.index(tk.INSERT)
+        current = self.input_var.get()
+        new_text = current[:pos] + emoji + current[pos:]
+        self.input_var.set(new_text)
+        self.input_entry.icursor(pos + len(emoji))
+        self.input_entry.focus()
 
     def add_message(self, pkt):
         uname = pkt.get("username", "?")
@@ -415,9 +746,13 @@ class ChatWindow:
         self.chat_box.config(state=tk.NORMAL)
         self.chat_box.insert(tk.END, "\n")
 
-        direction = f"ЛС от {frm}" if frm != self.username else f"ЛС → {to}"
+        direction = (
+            f"ЛС от {frm}" if frm != self.username else f"ЛС → {to}"
+        )
         self.chat_box.insert(
-            tk.END, f"  🔒 {direction}  {ts}\n", "private_label"
+            tk.END,
+            f"  🔒 {direction}  {ts}\n",
+            "private_label"
         )
         self.chat_box.insert(tk.END, f"  {text}\n", "private_msg")
         self.chat_box.config(state=tk.DISABLED)
@@ -425,7 +760,9 @@ class ChatWindow:
 
     def _sys_msg(self, text):
         self.chat_box.config(state=tk.NORMAL)
-        self.chat_box.insert(tk.END, f"\n  ─── {text} ───\n", "system")
+        self.chat_box.insert(
+            tk.END, f"\n  ─── {text} ───\n", "system"
+        )
         self.chat_box.config(state=tk.DISABLED)
         self.chat_box.see(tk.END)
 
@@ -441,7 +778,9 @@ class ChatWindow:
         if not text:
             return
         if len(text) > 500:
-            self.status_var.set("Слишком длинное сообщение (макс. 500)")
+            self.status_var.set(
+                "Слишком длинное сообщение (макс. 500)"
+            )
             return
 
         if self.private_target:
@@ -455,7 +794,9 @@ class ChatWindow:
         sel = self.users_list.curselection()
         if not sel:
             return
-        item = self.users_list.get(sel[0]).strip().lstrip("★").strip()
+        item = (
+            self.users_list.get(sel[0]).strip().lstrip("★").strip()
+        )
         if item == self.username:
             return
         self.private_target = item
@@ -481,6 +822,8 @@ class ChatWindow:
         self.input_entry.config(state=tk.DISABLED)
 
     def _on_close(self):
+        if self.emoji_picker:
+            self.emoji_picker._close()
         self.client.disconnect()
         self.root.destroy()
 
@@ -514,14 +857,17 @@ class NexusApp:
             messagebox.showerror(
                 "Ошибка подключения",
                 f"Не удалось подключиться к серверу:\n{e}\n\n"
-                f"Убедитесь, что сервер запущен ({config.HOST}:{config.PORT})"
+                f"Убедитесь, что сервер запущен "
+                f"({config.HOST}:{config.PORT})"
             )
             self._show_login()
 
     def _on_connect(self, data):
         def _do():
             self.root.deiconify()
-            self.chat_win = ChatWindow(self.root, self.client.username, self.client)
+            self.chat_win = ChatWindow(
+                self.root, self.client.username, self.client
+            )
             users = data.get("users", [])
             self.chat_win.update_users(users)
         self.root.after(0, _do)
@@ -533,22 +879,30 @@ class NexusApp:
     def _on_system(self, pkt):
         if self.chat_win:
             msg = pkt.get("message", "")
-            self.root.after(0, lambda: self.chat_win._sys_msg(msg))
+            self.root.after(
+                0, lambda: self.chat_win._sys_msg(msg)
+            )
 
     def _on_userlist(self, users):
         if self.chat_win:
-            self.root.after(0, lambda: self.chat_win.update_users(users))
+            self.root.after(
+                0, lambda: self.chat_win.update_users(users)
+            )
 
     def _on_private(self, pkt):
         if self.chat_win:
-            self.root.after(0, lambda: self.chat_win.add_private(pkt))
+            self.root.after(
+                0, lambda: self.chat_win.add_private(pkt)
+            )
 
     def _on_disconnect(self):
         if self.chat_win:
             self.root.after(0, self.chat_win.set_disconnected)
 
     def _on_error(self, msg):
-        self.root.after(0, lambda: messagebox.showerror("Ошибка", msg))
+        self.root.after(
+            0, lambda: messagebox.showerror("Ошибка", msg)
+        )
 
 if __name__ == "__main__":
     NexusApp()

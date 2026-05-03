@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -13,9 +16,14 @@ from keyboards import (
     admin_answer,
     admin_panel,
     admin_stats_menu,
+    broadcast_confirm,
+    cancel_broadcast,
 )
 from config import ADMIN_ID, CHANNEL_ID
 from stats import stats
+from users import user_storage
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -24,6 +32,7 @@ class UserStates(StatesGroup):
     waiting_idea = State()
     waiting_bug = State()
     waiting_admin_answer = State()
+    waiting_broadcast = State()
 
 FAQ_ANSWERS = {
     "faq_subscribe": (
@@ -62,6 +71,9 @@ def is_admin(user_id: int) -> bool:
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
+
+    user_storage.add(message.from_user.id)
+
     user_name = message.from_user.first_name
     admin = is_admin(message.from_user.id)
 
@@ -124,6 +136,8 @@ async def process_question(
 ) -> None:
     user = message.from_user
 
+    user_storage.add(user.id)
+
     stats.add_question()
 
     await bot.send_message(
@@ -177,6 +191,8 @@ async def process_idea(
     bot: Bot
 ) -> None:
     user = message.from_user
+
+    user_storage.add(user.id)
 
     stats.add_idea()
 
@@ -232,6 +248,8 @@ async def process_bug(
     bot: Bot
 ) -> None:
     user = message.from_user
+
+    user_storage.add(user.id)
 
     stats.add_bug()
 
@@ -349,7 +367,8 @@ async def callback_admin_panel(callback: CallbackQuery) -> None:
     await callback.message.edit_text(
         text=(
             "⚙️ <b>Админ-панель</b>\n\n"
-            "Управление ботом поддержки канала.\n"
+            f"👥 Пользователей в базе: "
+            f"<b>{user_storage.count()}</b>\n\n"
             "Выберите нужный раздел 👇"
         ),
         reply_markup=admin_panel(),
@@ -385,6 +404,173 @@ async def callback_admin_stats_refresh(callback: CallbackQuery) -> None:
         await callback.answer("✅ Статистика обновлена!")
     except TelegramBadRequest as error:
         if "message is not modified" in str(error):
-            await callback.answer("📊 Статистика актуальна, новых обращений нет!")
+            await callback.answer(
+                "📊 Статистика актуальна, новых обращений нет!"
+            )
         else:
             raise
+
+@router.callback_query(F.data == "admin_broadcast")
+async def callback_admin_broadcast(
+    callback: CallbackQuery,
+    state: FSMContext
+) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ У вас нет доступа!", show_alert=True)
+        return
+
+    total = user_storage.count()
+
+    if total == 0:
+        await callback.answer(
+            "⚠️ Нет пользователей для рассылки!",
+            show_alert=True
+        )
+        return
+
+    await state.set_state(UserStates.waiting_broadcast)
+    await callback.message.edit_text(
+        text=(
+            "📣 <b>Рассылка сообщений</b>\n\n"
+            f"👥 Получателей: <b>{total}</b> пользователей\n\n"
+            "Напишите сообщение для рассылки.\n"
+            "Поддерживается <b>HTML</b> форматирование:\n"
+            "<code>&lt;b&gt;жирный&lt;/b&gt;</code>\n"
+            "<code>&lt;i&gt;курсив&lt;/i&gt;</code>\n"
+            "<code>&lt;code&gt;код&lt;/code&gt;</code>\n\n"
+            "<i>Нажмите «Отменить рассылку» чтобы вернуться</i>"
+        ),
+        reply_markup=cancel_broadcast(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.message(
+    UserStates.waiting_broadcast,
+    F.from_user.id == ADMIN_ID
+)
+async def process_broadcast_text(
+    message: Message,
+    state: FSMContext
+) -> None:
+    await state.update_data(broadcast_text=message.text)
+
+    total = user_storage.count()
+
+    await message.answer(
+        text=(
+            "👀 <b>Превью рассылки</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            f"{message.text}\n\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            f"📤 Будет отправлено: <b>{total}</b> пользователям\n\n"
+            "Подтвердите отправку или измените текст 👇"
+        ),
+        reply_markup=broadcast_confirm(),
+        parse_mode="HTML"
+    )
+
+@router.callback_query(F.data == "broadcast_edit")
+async def callback_broadcast_edit(
+    callback: CallbackQuery,
+    state: FSMContext
+) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ У вас нет доступа!", show_alert=True)
+        return
+
+    total = user_storage.count()
+    await state.set_state(UserStates.waiting_broadcast)
+
+    await callback.message.edit_text(
+        text=(
+            "✏️ <b>Изменить текст рассылки</b>\n\n"
+            f"👥 Получателей: <b>{total}</b> пользователей\n\n"
+            "Напишите новый текст для рассылки 👇"
+        ),
+        reply_markup=cancel_broadcast(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "broadcast_confirm")
+async def callback_broadcast_confirm(
+    callback: CallbackQuery,
+    state: FSMContext,
+    bot: Bot
+) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ У вас нет доступа!", show_alert=True)
+        return
+
+    data = await state.get_data()
+    broadcast_text = data.get("broadcast_text")
+    await state.clear()
+
+    users = user_storage.all()
+    total = len(users)
+
+    success = 0
+    failed = 0
+
+    progress_message = await callback.message.edit_text(
+        text=(
+            "📤 <b>Рассылка запущена...</b>\n\n"
+            f"⏳ Отправляем: 0 / {total}"
+        ),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+    for index, user_id in enumerate(users, start=1):
+        if user_id == ADMIN_ID:
+            total -= 1
+            continue
+
+        try:
+            await bot.send_message(
+                chat_id=user_id,
+                text=(
+                    "📢 <b>Сообщение от администратора канала</b>\n"
+                    "━━━━━━━━━━━━━━━━━━\n\n"
+                    f"{broadcast_text}"
+                ),
+                parse_mode="HTML"
+            )
+            success += 1
+        except TelegramBadRequest as error:
+            logger.warning(
+                "Broadcast failed for user %s: %s", user_id, error
+            )
+            failed += 1
+        except Exception as error:
+            logger.warning(
+                "Broadcast failed for user %s: %s", user_id, error
+            )
+            failed += 1
+
+        if index % 10 == 0:
+            try:
+                await progress_message.edit_text(
+                    text=(
+                        "📤 <b>Рассылка в процессе...</b>\n\n"
+                        f"⏳ Отправляем: {index} / {total}"
+                    ),
+                    parse_mode="HTML"
+                )
+            except TelegramBadRequest:
+                pass
+
+        await asyncio.sleep(0.05)
+
+    await progress_message.edit_text(
+        text=(
+            "✅ <b>Рассылка завершена!</b>\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            f"📤 Всего получателей: <b>{total}</b>\n"
+            f"✅ Успешно доставлено: <b>{success}</b>\n"
+            f"❌ Не доставлено: <b>{failed}</b>"
+        ),
+        reply_markup=admin_panel(),
+        parse_mode="HTML"
+    )

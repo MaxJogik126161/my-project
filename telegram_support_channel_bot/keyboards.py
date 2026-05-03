@@ -118,8 +118,8 @@ def admin_panel() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="🔄 Обновить статистику",
-                callback_data="admin_stats_refresh"
+                text="📣 Сделать рассылку",
+                callback_data="admin_broadcast"
             )
         ],
         [
@@ -149,6 +149,38 @@ def admin_stats_menu() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="🏠 Главное меню",
                 callback_data="main_menu"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def broadcast_confirm() -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="✅ Отправить всем",
+                callback_data="broadcast_confirm"
+            ),
+            InlineKeyboardButton(
+                text="✏️ Изменить",
+                callback_data="broadcast_edit"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data="admin_panel"
+            )
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def cancel_broadcast() -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="❌ Отменить рассылку",
+                callback_data="admin_panel"
             )
         ]
     ]

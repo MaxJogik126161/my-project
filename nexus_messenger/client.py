@@ -1,25 +1,517 @@
 import socket
 import threading
 import json
+import os
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from datetime import datetime
-import sys
 
 import config
+
+class ChatHistory:
+    def __init__(self, username):
+        self.username  = username
+        self.filepath  = f"history_{username}.json"
+        self.messages  = []
+        self._lock     = threading.Lock()
+        self._load()
+
+    def _load(self):
+        if not os.path.exists(self.filepath):
+            self.messages = []
+            return
+        try:
+            with open(self.filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.messages = data.get("messages", [])
+        except Exception:
+            self.messages = []
+
+    def _save(self):
+        data = {
+            "username": self.username,
+            "saved":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total":    len(self.messages),
+            "messages": self.messages
+        }
+        try:
+            with open(self.filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def add_message(self, pkt):
+        entry = {
+            "type":     "message",
+            "username": pkt.get("username", "?"),
+            "text":     pkt.get("text", ""),
+            "time":     pkt.get("time", ""),
+            "date":     datetime.now().strftime("%Y-%m-%d")
+        }
+        with self._lock:
+            self.messages.append(entry)
+            self._save()
+
+    def add_private(self, pkt):
+        entry = {
+            "type":     "private",
+            "from":     pkt.get("from", "?"),
+            "to":       pkt.get("to", "?"),
+            "text":     pkt.get("text", ""),
+            "time":     pkt.get("time", ""),
+            "date":     datetime.now().strftime("%Y-%m-%d")
+        }
+        with self._lock:
+            self.messages.append(entry)
+            self._save()
+
+    def add_system(self, text):
+        entry = {
+            "type": "system",
+            "text": text,
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "date": datetime.now().strftime("%Y-%m-%d")
+        }
+        with self._lock:
+            self.messages.append(entry)
+            self._save()
+
+    def get_all(self):
+        with self._lock:
+            return list(self.messages)
+
+    def get_count(self):
+        with self._lock:
+            return len(self.messages)
+
+    def clear(self):
+        with self._lock:
+            self.messages = []
+            self._save()
+
+    def get_filepath(self):
+        return os.path.abspath(self.filepath)
+
+class HistoryWindow:
+    def __init__(self, parent, history: ChatHistory, username: str):
+        self.history  = history
+        self.username = username
+        self.parent   = parent
+
+        self.win = tk.Toplevel(parent)
+        self.win.title("📜 История чата — Nexus")
+        self.win.geometry("680x520")
+        self.win.configure(bg=config.BG_DARK)
+        self.win.resizable(True, True)
+        self.win.grab_set()
+
+        self._build()
+        self._load_messages()
+
+    def _build(self):
+        hdr = tk.Frame(self.win, bg=config.BG_LIGHT, pady=8)
+        hdr.pack(fill=tk.X)
+
+        tk.Label(
+            hdr, text="📜 ИСТОРИЯ ЧАТА",
+            bg=config.BG_LIGHT, fg=config.ACCENT,
+            font=("Consolas", 13, "bold")
+        ).pack(side=tk.LEFT, padx=15)
+
+        self.count_lbl = tk.Label(
+            hdr, text="",
+            bg=config.BG_LIGHT, fg=config.TEXT_MUTED,
+            font=("Consolas", 9)
+        )
+        self.count_lbl.pack(side=tk.RIGHT, padx=15)
+
+        filter_frame = tk.Frame(
+            self.win, bg=config.BG_MEDIUM, pady=6
+        )
+        filter_frame.pack(fill=tk.X, padx=8, pady=(6, 0))
+
+        tk.Label(
+            filter_frame, text="🔍",
+            bg=config.BG_MEDIUM, fg=config.TEXT_MUTED,
+            font=("Consolas", 11)
+        ).pack(side=tk.LEFT, padx=(6, 2))
+
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", self._on_filter)
+        search_entry = tk.Entry(
+            filter_frame,
+            textvariable=self.search_var,
+            bg=config.INPUT_BG, fg=config.TEXT_PRIMARY,
+            insertbackground=config.TEXT_PRIMARY,
+            font=("Consolas", 11),
+            relief=tk.FLAT, bd=4, width=22
+        )
+        search_entry.pack(side=tk.LEFT, padx=4)
+
+        tk.Label(
+            filter_frame, text="Тип:",
+            bg=config.BG_MEDIUM, fg=config.TEXT_SECONDARY,
+            font=("Consolas", 9)
+        ).pack(side=tk.LEFT, padx=(12, 2))
+
+        self.type_var = tk.StringVar(value="Все")
+        type_menu = tk.OptionMenu(
+            filter_frame, self.type_var,
+            "Все", "Сообщения", "Личные", "Системные",
+            command=lambda _: self._on_filter()
+        )
+        type_menu.config(
+            bg=config.BG_LIGHT, fg=config.TEXT_PRIMARY,
+            font=("Consolas", 9),
+            relief=tk.FLAT, bd=0,
+            activebackground=config.ACCENT,
+            highlightthickness=0
+        )
+        type_menu["menu"].config(
+            bg=config.BG_LIGHT, fg=config.TEXT_PRIMARY,
+            font=("Consolas", 9)
+        )
+        type_menu.pack(side=tk.LEFT, padx=4)
+
+        tk.Button(
+            filter_frame, text="✕ Сброс",
+            bg=config.BG_LIGHT, fg=config.TEXT_MUTED,
+            font=("Consolas", 9),
+            relief=tk.FLAT, padx=8,
+            command=self._reset_filter
+        ).pack(side=tk.LEFT, padx=4)
+
+        text_frame = tk.Frame(self.win, bg=config.BG_DARK)
+        text_frame.pack(
+            fill=tk.BOTH, expand=True, padx=8, pady=6
+        )
+
+        self.text_box = tk.Text(
+            text_frame,
+            bg=config.BG_DARK, fg=config.TEXT_PRIMARY,
+            font=("Consolas", 10),
+            relief=tk.FLAT,
+            state=tk.DISABLED,
+            wrap=tk.WORD,
+            padx=10, pady=6
+        )
+        self.text_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        sb = tk.Scrollbar(
+            text_frame,
+            command=self.text_box.yview,
+            bg=config.SCROLLBAR_BG
+        )
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.text_box.configure(yscrollcommand=sb.set)
+
+        self.text_box.tag_configure(
+            "date_sep", foreground=config.TEXT_MUTED,
+            font=("Consolas", 9, "italic"),
+            justify="center"
+        )
+        self.text_box.tag_configure(
+            "own_name", foreground=config.ACCENT,
+            font=("Consolas", 10, "bold")
+        )
+        self.text_box.tag_configure(
+            "other_name", foreground="#64b5f6",
+            font=("Consolas", 10, "bold")
+        )
+        self.text_box.tag_configure(
+            "system", foreground="#9c88ff",
+            font=("Consolas", 9, "italic")
+        )
+        self.text_box.tag_configure(
+            "time", foreground=config.TEXT_MUTED,
+            font=("Consolas", 8)
+        )
+        self.text_box.tag_configure(
+            "msg_text", foreground=config.TEXT_PRIMARY,
+            font=("Consolas", 10)
+        )
+        self.text_box.tag_configure(
+            "private_label", foreground="#ffd700",
+            font=("Consolas", 9, "bold")
+        )
+        self.text_box.tag_configure(
+            "private_text", foreground="#ffd700",
+            font=("Consolas", 10)
+        )
+        self.text_box.tag_configure(
+            "highlight", background="#2a3a1a",
+            foreground="#b8ff80"
+        )
+        self.text_box.tag_configure(
+            "empty", foreground=config.TEXT_MUTED,
+            font=("Consolas", 11, "italic"),
+            justify="center"
+        )
+
+        btn_frame = tk.Frame(self.win, bg=config.BG_DARK, pady=6)
+        btn_frame.pack(fill=tk.X, padx=8)
+
+        tk.Button(
+            btn_frame, text="📂 Открыть файл",
+            bg=config.BG_LIGHT, fg=config.TEXT_PRIMARY,
+            font=("Consolas", 9),
+            relief=tk.FLAT, padx=10, pady=5,
+            command=self._open_file
+        ).pack(side=tk.LEFT, padx=4)
+
+        tk.Button(
+            btn_frame, text="💾 Экспорт в TXT",
+            bg=config.BG_LIGHT, fg=config.TEXT_PRIMARY,
+            font=("Consolas", 9),
+            relief=tk.FLAT, padx=10, pady=5,
+            command=self._export_txt
+        ).pack(side=tk.LEFT, padx=4)
+
+        tk.Button(
+            btn_frame, text="🗑 Очистить историю",
+            bg=config.OFFLINE_RED, fg="white",
+            font=("Consolas", 9),
+            relief=tk.FLAT, padx=10, pady=5,
+            command=self._clear_history
+        ).pack(side=tk.LEFT, padx=4)
+
+        tk.Button(
+            btn_frame, text="✕ Закрыть",
+            bg=config.BG_MEDIUM, fg=config.TEXT_MUTED,
+            font=("Consolas", 9),
+            relief=tk.FLAT, padx=10, pady=5,
+            command=self.win.destroy
+        ).pack(side=tk.RIGHT, padx=4)
+
+        self.path_lbl = tk.Label(
+            self.win,
+            text=f"📁 {self.history.get_filepath()}",
+            bg=config.BG_DARK, fg=config.TEXT_MUTED,
+            font=("Consolas", 8),
+            anchor=tk.W
+        )
+        self.path_lbl.pack(fill=tk.X, padx=10, pady=(0, 4))
+
+    def _load_messages(self, search="", msg_type="Все"):
+        messages = self.history.get_all()
+
+        filtered = []
+        for m in messages:
+            t = m.get("type", "")
+            if msg_type == "Сообщения" and t != "message":
+                continue
+            if msg_type == "Личные" and t != "private":
+                continue
+            if msg_type == "Системные" and t != "system":
+                continue
+
+            if search:
+                text = m.get("text", "").lower()
+                uname = m.get("username", m.get("from", "")).lower()
+                if search.lower() not in text and \
+                   search.lower() not in uname:
+                    continue
+
+            filtered.append(m)
+
+        self._render(filtered, search)
+        total = self.history.get_count()
+        shown = len(filtered)
+        self.count_lbl.config(
+            text=f"Показано: {shown} / Всего: {total}"
+        )
+
+    def _render(self, messages, highlight=""):
+        self.text_box.config(state=tk.NORMAL)
+        self.text_box.delete("1.0", tk.END)
+
+        if not messages:
+            self.text_box.insert(
+                tk.END,
+                "\n\n    История пуста или ничего не найдено\n",
+                "empty"
+            )
+            self.text_box.config(state=tk.DISABLED)
+            return
+
+        prev_date = None
+
+        for m in messages:
+            date = m.get("date", "")
+            time = m.get("time", "")
+            mtype = m.get("type", "message")
+
+            if date and date != prev_date:
+                self.text_box.insert(
+                    tk.END,
+                    f"\n  ── {date} ──────────────────────\n",
+                    "date_sep"
+                )
+                prev_date = date
+
+            if mtype == "message":
+                uname = m.get("username", "?")
+                text  = m.get("text", "")
+                tag   = "own_name" if uname == self.username \
+                        else "other_name"
+                self.text_box.insert(tk.END, f"  {uname}", tag)
+                self.text_box.insert(
+                    tk.END, f"  {time}\n", "time"
+                )
+                self._insert_with_highlight(
+                    f"  {text}\n", "msg_text", highlight
+                )
+
+            elif mtype == "private":
+                frm  = m.get("from", "?")
+                to   = m.get("to", "?")
+                text = m.get("text", "")
+                direction = f"ЛС от {frm}" \
+                    if frm != self.username else f"ЛС → {to}"
+                self.text_box.insert(
+                    tk.END,
+                    f"  🔒 {direction}  {time}\n",
+                    "private_label"
+                )
+                self._insert_with_highlight(
+                    f"  {text}\n", "private_text", highlight
+                )
+
+            elif mtype == "system":
+                text = m.get("text", "")
+                self.text_box.insert(
+                    tk.END,
+                    f"  ─── {text} ───  {time}\n",
+                    "system"
+                )
+
+        self.text_box.config(state=tk.DISABLED)
+        self.text_box.see(tk.END)
+
+    def _insert_with_highlight(self, text, base_tag, keyword):
+        if not keyword:
+            self.text_box.insert(tk.END, text, base_tag)
+            return
+
+        lower_text    = text.lower()
+        lower_keyword = keyword.lower()
+        start = 0
+
+        while True:
+            idx = lower_text.find(lower_keyword, start)
+            if idx == -1:
+                self.text_box.insert(
+                    tk.END, text[start:], base_tag
+                )
+                break
+            self.text_box.insert(
+                tk.END, text[start:idx], base_tag
+            )
+            self.text_box.insert(
+                tk.END,
+                text[idx:idx + len(keyword)],
+                "highlight"
+            )
+            start = idx + len(keyword)
+
+    def _on_filter(self, *args):
+        self._load_messages(
+            search   = self.search_var.get().strip(),
+            msg_type = self.type_var.get()
+        )
+
+    def _reset_filter(self):
+        self.search_var.set("")
+        self.type_var.set("Все")
+        self._load_messages()
+
+    def _open_file(self):
+        path = self.history.get_filepath()
+        if os.path.exists(path):
+            os.startfile(path)
+        else:
+            messagebox.showinfo(
+                "Файл не найден",
+                "История ещё не сохранена"
+            )
+
+    def _export_txt(self):
+        path = filedialog.asksaveasfilename(
+            parent=self.win,
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All", "*.*")],
+            initialfile=f"nexus_history_{self.username}.txt"
+        )
+        if not path:
+            return
+        try:
+            messages = self.history.get_all()
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(
+                    f"Nexus Messenger — история чата\n"
+                    f"Пользователь: {self.username}\n"
+                    f"Экспорт: "
+                    f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"{'─' * 50}\n\n"
+                )
+                prev_date = None
+                for m in messages:
+                    date  = m.get("date", "")
+                    time  = m.get("time", "")
+                    mtype = m.get("type", "")
+
+                    if date != prev_date:
+                        f.write(f"\n── {date} ──\n")
+                        prev_date = date
+
+                    if mtype == "message":
+                        f.write(
+                            f"[{time}] {m.get('username','?')}: "
+                            f"{m.get('text','')}\n"
+                        )
+                    elif mtype == "private":
+                        f.write(
+                            f"[{time}] 🔒 "
+                            f"{m.get('from','?')} → "
+                            f"{m.get('to','?')}: "
+                            f"{m.get('text','')}\n"
+                        )
+                    elif mtype == "system":
+                        f.write(
+                            f"[{time}] *** {m.get('text','')} ***\n"
+                        )
+            messagebox.showinfo(
+                "Экспорт завершён",
+                f"Файл сохранён:\n{path}"
+            )
+        except Exception as e:
+            messagebox.showerror("Ошибка", str(e))
+
+    def _clear_history(self):
+        if messagebox.askyesno(
+            "Очистить историю",
+            "Удалить всю историю сообщений?\n"
+            "Это действие нельзя отменить.",
+            parent=self.win
+        ):
+            self.history.clear()
+            self._load_messages()
+            messagebox.showinfo(
+                "Готово", "История очищена", parent=self.win
+            )
 
 class NexusClient:
     def __init__(self, on_message, on_system, on_userlist,
                  on_connect, on_disconnect, on_error, on_private):
-        self.on_message = on_message
-        self.on_system = on_system
-        self.on_userlist = on_userlist
-        self.on_connect = on_connect
+        self.on_message    = on_message
+        self.on_system     = on_system
+        self.on_userlist   = on_userlist
+        self.on_connect    = on_connect
         self.on_disconnect = on_disconnect
-        self.on_error = on_error
-        self.on_private = on_private
+        self.on_error      = on_error
+        self.on_private    = on_private
 
-        self.sock = None
+        self.sock     = None
         self.username = None
         self.connected = False
 
@@ -39,13 +531,16 @@ class NexusClient:
         data = json.loads(line)
 
         if data.get("type") == "error":
-            raise ConnectionError(data.get("message", "Ошибка сервера"))
-
+            raise ConnectionError(
+                data.get("message", "Ошибка сервера")
+            )
         if data.get("type") != "welcome":
             raise ConnectionError("Неверный ответ сервера")
 
         self.connected = True
-        threading.Thread(target=self._recv_loop, daemon=True).start()
+        threading.Thread(
+            target=self._recv_loop, daemon=True
+        ).start()
         self.on_connect(data)
 
     def _recv_line(self):
@@ -113,21 +608,18 @@ class TitleNotifier:
         self._blink_job  = None
         self._blink_state = False
         self._pending    = 0
+        self._focused    = True
 
         self.root.bind("<FocusIn>",  self._on_focus_in)
         self.root.bind("<FocusOut>", self._on_focus_out)
 
-        self._focused = True
-
     def notify(self, text="💬 Новое сообщение"):
         if self._focused:
             return
-
         self._pending += 1
         self._alt_title = f"({self._pending}) {text}"
-
         if not self._blinking:
-            self._blinking = True
+            self._blinking   = True
             self._blink_state = False
             self._do_blink()
 
@@ -145,21 +637,19 @@ class TitleNotifier:
     def _do_blink(self):
         if not self._blinking:
             return
-
         if self._blink_state:
             self.root.title(self.base_title)
         else:
             self.root.title(self._alt_title)
-
         self._blink_state = not self._blink_state
         self._blink_job = self.root.after(
             self.BLINK_INTERVAL, self._do_blink
         )
 
     def _stop_blink(self):
-        self._blinking   = False
+        self._blinking    = False
         self._blink_state = False
-        self._pending    = 0
+        self._pending     = 0
         if self._blink_job is not None:
             try:
                 self.root.after_cancel(self._blink_job)
@@ -264,11 +754,11 @@ class EmojiPicker:
     ]
 
     def __init__(self, parent, on_select):
-        self.on_select   = on_select
-        self.win         = None
-        self.parent      = parent
+        self.on_select        = on_select
+        self.win              = None
+        self.parent           = parent
         self.current_category = 0
-        self.search_var  = tk.StringVar()
+        self.search_var       = tk.StringVar()
         self.search_var.trace_add("write", self._on_search)
 
     def toggle(self, anchor_widget):
@@ -290,7 +780,6 @@ class EmojiPicker:
         if x < 0:
             x = 0
         self.win.geometry(f"420x360+{x}+{y}")
-
         self._build_picker()
         self.win.bind("<FocusOut>", self._on_focus_out)
         self.win.focus_set()
@@ -313,7 +802,9 @@ class EmojiPicker:
             command=self._close
         ).pack(side=tk.RIGHT, padx=4)
 
-        search_frame = tk.Frame(self.win, bg=config.BG_MEDIUM, pady=4)
+        search_frame = tk.Frame(
+            self.win, bg=config.BG_MEDIUM, pady=4
+        )
         search_frame.pack(fill=tk.X, padx=6)
 
         tk.Label(
@@ -330,7 +821,9 @@ class EmojiPicker:
             font=("Consolas", 11),
             relief=tk.FLAT, bd=4
         )
-        self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.search_entry.pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
         self.search_entry.focus()
 
         self.cat_frame = tk.Frame(self.win, bg=config.BG_DARK)
@@ -401,10 +894,11 @@ class EmojiPicker:
         self.current_category = idx
         for i, btn in enumerate(self.cat_buttons):
             btn.config(
-                bg=config.BG_LIGHT if i == idx else config.BG_DARK
+                bg=config.BG_LIGHT if i == idx
+                else config.BG_DARK
             )
         self.search_var.set("")
-        name, start, end = self.CATEGORIES[idx]
+        _, start, end = self.CATEGORIES[idx]
         self._fill_grid(self.EMOJIS[start:end])
 
     def _on_search(self, *args):
@@ -438,11 +932,11 @@ class EmojiPicker:
             btn.grid(row=row, column=col, padx=1, pady=1)
             btn.bind(
                 "<Enter>",
-                lambda event, b=btn: b.config(bg=config.BG_LIGHT)
+                lambda ev, b=btn: b.config(bg=config.BG_LIGHT)
             )
             btn.bind(
                 "<Leave>",
-                lambda event, b=btn: b.config(bg=config.BG_MEDIUM)
+                lambda ev, b=btn: b.config(bg=config.BG_MEDIUM)
             )
 
         self.canvas.yview_moveto(0)
@@ -487,7 +981,7 @@ class LoginWindow:
         ).pack(pady=(25, 0))
 
         tk.Label(
-            self.win, text="Messenger v0.3",
+            self.win, text="Messenger v0.4",
             bg=config.BG_DARK, fg=config.TEXT_MUTED,
             font=("Consolas", 10)
         ).pack()
@@ -550,9 +1044,9 @@ class LoginWindow:
 
 class ChatWindow:
     def __init__(self, root, username, client):
-        self.root          = root
-        self.username      = username
-        self.client        = client
+        self.root           = root
+        self.username       = username
+        self.client         = client
         self.private_target = None
         self.message_count  = 0
         self.emoji_picker   = None
@@ -563,11 +1057,18 @@ class ChatWindow:
         self.root.configure(bg=config.BG_DARK)
         self.root.minsize(700, 450)
 
+        self.history = ChatHistory(username)
+
         self._build_ui()
-
         self.notifier = TitleNotifier(self.root, self._base_title)
-
         self._sys_msg(f"✅ Подключён как {username}")
+
+        count = self.history.get_count()
+        if count > 0:
+            self._sys_msg(
+                f"📜 Загружена история: {count} сообщений"
+            )
+
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_ui(self):
@@ -607,10 +1108,21 @@ class ChatWindow:
             font=("Consolas", 10)
         ).pack(side=tk.RIGHT, padx=15)
 
+        tk.Button(
+            hdr, text="📜 История",
+            bg=config.BG_MEDIUM, fg=config.TEXT_PRIMARY,
+            font=("Consolas", 9),
+            relief=tk.FLAT, padx=10, pady=4,
+            activebackground=config.ACCENT,
+            command=self._open_history
+        ).pack(side=tk.RIGHT, padx=6)
+
         main = tk.Frame(self.root, bg=config.BG_DARK)
         main.pack(fill=tk.BOTH, expand=True)
 
-        users_frame = tk.Frame(main, bg=config.BG_MEDIUM, width=180)
+        users_frame = tk.Frame(
+            main, bg=config.BG_MEDIUM, width=180
+        )
         users_frame.pack(side=tk.RIGHT, fill=tk.Y)
         users_frame.pack_propagate(False)
 
@@ -629,8 +1141,12 @@ class ChatWindow:
             relief=tk.FLAT, border=0,
             activestyle="none"
         )
-        self.users_list.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
-        self.users_list.bind("<Double-Button-1>", self._on_user_click)
+        self.users_list.pack(
+            fill=tk.BOTH, expand=True, padx=8, pady=4
+        )
+        self.users_list.bind(
+            "<Double-Button-1>", self._on_user_click
+        )
 
         tk.Label(
             users_frame,
@@ -689,12 +1205,15 @@ class ChatWindow:
         )
 
         sb = tk.Scrollbar(
-            chat_frame, command=self.chat_box.yview,
+            chat_frame,
+            command=self.chat_box.yview,
             bg=config.SCROLLBAR_BG
         )
         self.chat_box.configure(yscrollcommand=sb.set)
 
-        input_frame = tk.Frame(self.root, bg=config.BG_MEDIUM, pady=8)
+        input_frame = tk.Frame(
+            self.root, bg=config.BG_MEDIUM, pady=8
+        )
         input_frame.pack(fill=tk.X, padx=10, pady=6)
 
         self.pm_indicator = tk.Label(
@@ -708,13 +1227,10 @@ class ChatWindow:
         inp_row.pack(fill=tk.X)
 
         self.emoji_btn = tk.Button(
-            inp_row,
-            text="😊",
-            bg=config.BG_LIGHT,
-            fg=config.TEXT_PRIMARY,
+            inp_row, text="😊",
+            bg=config.BG_LIGHT, fg=config.TEXT_PRIMARY,
             font=("Segoe UI Emoji", 14),
-            relief=tk.FLAT,
-            padx=6, pady=4,
+            relief=tk.FLAT, padx=6, pady=4,
             activebackground=config.ACCENT,
             command=self._toggle_emoji
         )
@@ -733,7 +1249,9 @@ class ChatWindow:
             side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8)
         )
         self.input_entry.bind("<Return>", lambda e: self._send())
-        self.input_entry.bind("<Escape>", lambda e: self._cancel_pm())
+        self.input_entry.bind(
+            "<Escape>", lambda e: self._cancel_pm()
+        )
         self.input_entry.focus()
 
         tk.Button(
@@ -767,13 +1285,18 @@ class ChatWindow:
             on_select=self._insert_emoji
         )
 
+    def _open_history(self):
+        HistoryWindow(self.root, self.history, self.username)
+
     def _toggle_emoji(self):
         self.emoji_picker.toggle(self.emoji_btn)
 
     def _insert_emoji(self, emoji):
         pos = self.input_entry.index(tk.INSERT)
         current = self.input_var.get()
-        self.input_var.set(current[:pos] + emoji + current[pos:])
+        self.input_var.set(
+            current[:pos] + emoji + current[pos:]
+        )
         self.input_entry.icursor(pos + len(emoji))
         self.input_entry.focus()
 
@@ -783,25 +1306,38 @@ class ChatWindow:
         ts     = pkt.get("time", "")
         is_own = (uname == self.username)
 
+        self.history.add_message(pkt)
+
         self.chat_box.config(state=tk.NORMAL)
         self.chat_box.insert(tk.END, "\n")
 
         if is_own:
-            self.chat_box.insert(tk.END, f"  {uname}", "own_name")
+            self.chat_box.insert(
+                tk.END, f"  {uname}", "own_name"
+            )
         else:
-            self.chat_box.insert(tk.END, f"  {uname}", "other_name")
+            self.chat_box.insert(
+                tk.END, f"  {uname}", "other_name"
+            )
 
         self.chat_box.insert(tk.END, f"  {ts}\n", "time")
 
         if is_own:
-            self.chat_box.insert(tk.END, f"  {text}\n", "msg_own")
+            self.chat_box.insert(
+                tk.END, f"  {text}\n", "msg_own"
+            )
         else:
-            self.chat_box.insert(tk.END, f"  {text}\n", "msg_other")
+            self.chat_box.insert(
+                tk.END, f"  {text}\n", "msg_other"
+            )
 
         self.chat_box.config(state=tk.DISABLED)
         self.chat_box.see(tk.END)
         self.message_count += 1
-        self.status_var.set(f"Сообщений получено: {self.message_count}")
+        self.status_var.set(
+            f"Сообщений: {self.message_count}  "
+            f"│  История: {self.history.get_count()}"
+        )
 
         if not is_own:
             self.notifier.notify(f"💬 {uname}: {text[:30]}")
@@ -812,18 +1348,24 @@ class ChatWindow:
         text = pkt.get("text", "")
         ts   = pkt.get("time", "")
 
+        self.history.add_private(pkt)
+
         self.chat_box.config(state=tk.NORMAL)
         self.chat_box.insert(tk.END, "\n")
 
         direction = (
-            f"ЛС от {frm}" if frm != self.username else f"ЛС → {to}"
+            f"ЛС от {frm}"
+            if frm != self.username
+            else f"ЛС → {to}"
         )
         self.chat_box.insert(
             tk.END,
             f"  🔒 {direction}  {ts}\n",
             "private_label"
         )
-        self.chat_box.insert(tk.END, f"  {text}\n", "private_msg")
+        self.chat_box.insert(
+            tk.END, f"  {text}\n", "private_msg"
+        )
         self.chat_box.config(state=tk.DISABLED)
         self.chat_box.see(tk.END)
 
@@ -831,6 +1373,8 @@ class ChatWindow:
             self.notifier.notify_pm(frm)
 
     def _sys_msg(self, text):
+        self.history.add_system(text)
+
         self.chat_box.config(state=tk.NORMAL)
         self.chat_box.insert(
             tk.END, f"\n  ─── {text} ───\n", "system"
@@ -867,7 +1411,8 @@ class ChatWindow:
         if not sel:
             return
         item = (
-            self.users_list.get(sel[0]).strip().lstrip("★").strip()
+            self.users_list.get(sel[0])
+            .strip().lstrip("★").strip()
         )
         if item == self.username:
             return
@@ -903,10 +1448,10 @@ class ChatWindow:
 
 class NexusApp:
     def __init__(self):
-        self.root      = tk.Tk()
+        self.root     = tk.Tk()
         self.root.withdraw()
-        self.client    = None
-        self.chat_win  = None
+        self.client   = None
+        self.chat_win = None
         self._show_login()
         self.root.mainloop()
 

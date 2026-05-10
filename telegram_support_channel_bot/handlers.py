@@ -18,6 +18,7 @@ from keyboards import (
     admin_stats_menu,
     broadcast_confirm,
     cancel_broadcast,
+    users_list_nav,
 )
 from config import ADMIN_ID, CHANNEL_ID
 from stats import stats
@@ -26,6 +27,8 @@ from users import user_storage
 logger = logging.getLogger(__name__)
 
 router = Router()
+
+PAGE_SIZE = 10
 
 class UserStates(StatesGroup):
     waiting_question = State()
@@ -68,18 +71,59 @@ FAQ_ANSWERS = {
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
 
+def build_users_page(page: int) -> str:
+    total = user_storage.count()
+    total_pages = user_storage.total_pages(PAGE_SIZE)
+    users = user_storage.get_page(page, PAGE_SIZE)
+
+    lines = [
+        "👥 <b>Список пользователей</b>",
+        "━━━━━━━━━━━━━━━━━━\n",
+        f"📊 Всего пользователей: <b>{total}</b>\n",
+    ]
+
+    if not users:
+        lines.append("😔 Пользователей пока нет")
+        return "\n".join(lines)
+
+    start_index = page * PAGE_SIZE
+    for index, user in enumerate(users, start=start_index + 1):
+        username_part = (
+            f"@{user.username}"
+            if user.username
+            else "нет username"
+        )
+        lines.append(
+            f"{index}. <a href='tg://user?id={user.user_id}'>"
+            f"{user.full_name}</a>\n"
+            f"     🆔 <code>{user.user_id}</code> | "
+            f"📝 {username_part}"
+        )
+
+    lines.append(f"\n━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        f"📄 Страница <b>{page + 1}</b> из <b>{total_pages}</b>"
+    )
+
+    return "\n".join(lines)
+
 @router.message(CommandStart())
 async def start_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
 
-    user_storage.add(message.from_user.id)
+    user = message.from_user
 
-    user_name = message.from_user.first_name
-    admin = is_admin(message.from_user.id)
+    user_storage.add(
+        user_id=user.id,
+        full_name=user.full_name,
+        username=user.username
+    )
+
+    admin = is_admin(user.id)
 
     await message.answer(
         text=(
-            f"👋 Привет, <b>{user_name}</b>!\n\n"
+            f"👋 Привет, <b>{user.first_name}</b>!\n\n"
             f"Это бот поддержки канала <b>{CHANNEL_ID}</b>\n\n"
             "Я помогу тебе:\n"
             "❓ Задать вопрос администратору\n"
@@ -136,7 +180,11 @@ async def process_question(
 ) -> None:
     user = message.from_user
 
-    user_storage.add(user.id)
+    user_storage.add(
+        user_id=user.id,
+        full_name=user.full_name,
+        username=user.username
+    )
 
     stats.add_question()
 
@@ -192,7 +240,11 @@ async def process_idea(
 ) -> None:
     user = message.from_user
 
-    user_storage.add(user.id)
+    user_storage.add(
+        user_id=user.id,
+        full_name=user.full_name,
+        username=user.username
+    )
 
     stats.add_idea()
 
@@ -249,7 +301,11 @@ async def process_bug(
 ) -> None:
     user = message.from_user
 
-    user_storage.add(user.id)
+    user_storage.add(
+        user_id=user.id,
+        full_name=user.full_name,
+        username=user.username
+    )
 
     stats.add_bug()
 
@@ -390,7 +446,9 @@ async def callback_admin_stats(callback: CallbackQuery) -> None:
     await callback.answer()
 
 @router.callback_query(F.data == "admin_stats_refresh")
-async def callback_admin_stats_refresh(callback: CallbackQuery) -> None:
+async def callback_admin_stats_refresh(
+    callback: CallbackQuery
+) -> None:
     if not is_admin(callback.from_user.id):
         await callback.answer("⛔ У вас нет доступа!", show_alert=True)
         return
@@ -409,6 +467,44 @@ async def callback_admin_stats_refresh(callback: CallbackQuery) -> None:
             )
         else:
             raise
+
+@router.callback_query(F.data.startswith("users_list_"))
+async def callback_users_list(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ У вас нет доступа!", show_alert=True)
+        return
+
+    page = int(callback.data.split("_")[2])
+    total_pages = user_storage.total_pages(PAGE_SIZE)
+
+    if page < 0:
+        page = 0
+    if page >= total_pages:
+        page = total_pages - 1
+
+    try:
+        await callback.message.edit_text(
+            text=build_users_page(page),
+            reply_markup=users_list_nav(page, total_pages),
+            parse_mode="HTML"
+        )
+    except TelegramBadRequest as error:
+        if "message is not modified" in str(error):
+            await callback.answer("✅ Список актуален!")
+        else:
+            raise
+
+    await callback.answer()
+
+@router.callback_query(F.data == "users_page_info")
+async def callback_users_page_info(callback: CallbackQuery) -> None:
+    total = user_storage.count()
+    total_pages = user_storage.total_pages(PAGE_SIZE)
+    await callback.answer(
+        f"👥 Всего: {total} пользователей | "
+        f"📄 Страниц: {total_pages}",
+        show_alert=True
+    )
 
 @router.callback_query(F.data == "admin_broadcast")
 async def callback_admin_broadcast(
@@ -522,14 +618,14 @@ async def callback_broadcast_confirm(
     )
     await callback.answer()
 
-    for index, user_id in enumerate(users, start=1):
-        if user_id == ADMIN_ID:
+    for index, user in enumerate(users, start=1):
+        if user.user_id == ADMIN_ID:
             total -= 1
             continue
 
         try:
             await bot.send_message(
-                chat_id=user_id,
+                chat_id=user.user_id,
                 text=(
                     "📢 <b>Сообщение от администратора канала</b>\n"
                     "━━━━━━━━━━━━━━━━━━\n\n"
@@ -540,12 +636,14 @@ async def callback_broadcast_confirm(
             success += 1
         except TelegramBadRequest as error:
             logger.warning(
-                "Broadcast failed for user %s: %s", user_id, error
+                "Broadcast failed for user %s: %s",
+                user.user_id, error
             )
             failed += 1
         except Exception as error:
             logger.warning(
-                "Broadcast failed for user %s: %s", user_id, error
+                "Broadcast failed for user %s: %s",
+                user.user_id, error
             )
             failed += 1
 

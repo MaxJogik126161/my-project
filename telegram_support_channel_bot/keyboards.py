@@ -118,6 +118,12 @@ def admin_panel() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
+                text="👥 Список пользователей",
+                callback_data="users_list_0"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text="📣 Сделать рассылку",
                 callback_data="admin_broadcast"
             )
@@ -184,4 +190,60 @@ def cancel_broadcast() -> InlineKeyboardMarkup:
             )
         ]
     ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def users_list_nav(
+    current_page: int,
+    total_pages: int
+) -> InlineKeyboardMarkup:
+    buttons = []
+
+    nav_row = []
+
+    if current_page > 0:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="◀️ Назад",
+                callback_data=f"users_list_{current_page - 1}"
+            )
+        )
+
+    nav_row.append(
+        InlineKeyboardButton(
+            text=f"📄 {current_page + 1} / {total_pages}",
+            callback_data="users_page_info"
+        )
+    )
+
+    if current_page < total_pages - 1:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="Вперёд ▶️",
+                callback_data=f"users_list_{current_page + 1}"
+            )
+        )
+
+    buttons.append(nav_row)
+
+    buttons.append([
+        InlineKeyboardButton(
+            text="🔄 Обновить",
+            callback_data=f"users_list_{current_page}"
+        )
+    ])
+
+    buttons.append([
+        InlineKeyboardButton(
+            text="◀️ Назад в панель",
+            callback_data="admin_panel"
+        )
+    ])
+
+    buttons.append([
+        InlineKeyboardButton(
+            text="🏠 Главное меню",
+            callback_data="main_menu"
+        )
+    ])
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)

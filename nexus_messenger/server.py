@@ -1,34 +1,41 @@
 import socket
 import threading
 import json
-import time
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import scrolledtext
 from datetime import datetime
-import sys
 
 import config
 
 class NexusServer:
     def __init__(self):
-        self.clients = {}
-        self.usernames = {}
-        self.lock = threading.Lock()
+        self.clients       = {}
+        self.usernames     = {}
+        self.lock          = threading.Lock()
         self.server_socket = None
-        self.running = False
+        self.running       = False
         self.message_count = 0
-        self.start_time = None
+        self.start_time    = None
 
     def start(self, log_callback=None):
         self.log = log_callback or print
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket = socket.socket(
+            socket.AF_INET, socket.SOCK_STREAM
+        )
+        self.server_socket.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEADDR, 1
+        )
         self.server_socket.bind((config.HOST, config.PORT))
         self.server_socket.listen(config.MAX_CLIENTS)
-        self.running = True
+        self.running    = True
         self.start_time = datetime.now()
-        self.log(f"[SERVER] Nexus Server запущен на {config.HOST}:{config.PORT}")
-        threading.Thread(target=self._accept_loop, daemon=True).start()
+        self.log(
+            f"[SERVER] Nexus Server запущен "
+            f"на {config.HOST}:{config.PORT}"
+        )
+        threading.Thread(
+            target=self._accept_loop, daemon=True
+        ).start()
 
     def _accept_loop(self):
         while self.running:
@@ -51,7 +58,7 @@ class NexusServer:
             sock.sendall(msg.encode("utf-8"))
             return True
         except OSError as e:
-            if hasattr(e, 'winerror') and e.winerror == 10054:
+            if hasattr(e, "winerror") and e.winerror == 10054:
                 return False
             return False
         except Exception:
@@ -85,31 +92,30 @@ class NexusServer:
             with self.lock:
                 if not username or username in self.usernames:
                     self._send_json(conn, {
-                        "type": "error",
+                        "type":    "error",
                         "message": "Имя занято или недопустимо"
                     })
                     conn.close()
                     return
 
-                self.clients[conn] = username
+                self.clients[conn]       = username
                 self.usernames[username] = conn
                 user_list = list(self.usernames.keys())
 
             self._send_json(conn, {
-                "type": "welcome",
+                "type":     "welcome",
                 "username": username,
-                "users": user_list,
-                "message": f"Добро пожаловать в Nexus, {username}!"
+                "users":    user_list,
+                "message":  f"Добро пожаловать в Nexus, {username}!"
             })
 
             self._broadcast({
-                "type": "system",
+                "type":    "system",
                 "message": f"🟢 {username} подключился к чату",
-                "time": self._now()
+                "time":    self._now()
             }, exclude=conn)
 
             self._broadcast_user_list()
-
             self.log(f"[+] {username} подключился с {addr[0]}")
 
             while self.running:
@@ -123,7 +129,7 @@ class NexusServer:
                     pass
 
         except OSError as e:
-            if hasattr(e, 'winerror') and e.winerror == 10054:
+            if hasattr(e, "winerror") and e.winerror == 10054:
                 pass
             else:
                 self.log(f"[!] Ошибка клиента {addr}: {e}")
@@ -141,30 +147,37 @@ class NexusServer:
                 return
             self.message_count += 1
             out = {
-                "type": "message",
+                "type":     "message",
                 "username": username,
-                "text": text,
-                "time": self._now(),
-                "id": self.message_count
+                "text":     text,
+                "time":     self._now(),
+                "id":       self.message_count
             }
             self._broadcast(out)
             self.log(f"[MSG] {username}: {text[:60]}")
 
         elif ptype == "private":
             target = pkt.get("to")
-            text = pkt.get("text", "").strip()
+            text   = pkt.get("text", "").strip()
             with self.lock:
                 target_sock = self.usernames.get(target)
             if target_sock and text:
                 pm = {
                     "type": "private",
                     "from": username,
-                    "to": target,
+                    "to":   target,
                     "text": text,
                     "time": self._now()
                 }
                 self._send_json(target_sock, pm)
                 self._send_json(conn, pm)
+
+        elif ptype == "typing":
+            self._broadcast({
+                "type":     "typing",
+                "username": username,
+                "is_typing": pkt.get("is_typing", False)
+            }, exclude=conn)
 
         elif ptype == "ping":
             self._send_json(conn, {"type": "pong"})
@@ -192,7 +205,6 @@ class NexusServer:
                 del self.clients[conn]
             if username and username in self.usernames:
                 del self.usernames[username]
-
         try:
             conn.close()
         except Exception:
@@ -200,9 +212,9 @@ class NexusServer:
 
         if username:
             self._broadcast({
-                "type": "system",
+                "type":    "system",
                 "message": f"🔴 {username} покинул чат",
-                "time": self._now()
+                "time":    self._now()
             })
             self._broadcast_user_list()
             self.log(f"[-] {username} отключился")
@@ -227,15 +239,15 @@ class NexusServer:
             s = int(delta.total_seconds() % 60)
             uptime = f"{h:02d}:{m:02d}:{s:02d}"
         return {
-            "clients": len(self.clients),
+            "clients":  len(self.clients),
             "messages": self.message_count,
-            "uptime": uptime
+            "uptime":   uptime
         }
 
 class ServerGUI:
     def __init__(self):
         self.server = NexusServer()
-        self.root = tk.Tk()
+        self.root   = tk.Tk()
         self.root.title("Nexus Server — Control Panel")
         self.root.geometry("700x500")
         self.root.configure(bg=config.BG_DARK)
@@ -249,6 +261,7 @@ class ServerGUI:
     def _build_ui(self):
         hdr = tk.Frame(self.root, bg=config.BG_LIGHT, pady=10)
         hdr.pack(fill=tk.X)
+
         tk.Label(
             hdr, text="⚡ NEXUS SERVER",
             bg=config.BG_LIGHT, fg=config.ACCENT,
@@ -262,12 +275,20 @@ class ServerGUI:
         )
         self.status_lbl.pack(side=tk.RIGHT, padx=20)
 
-        stats_frame = tk.Frame(self.root, bg=config.BG_MEDIUM, pady=8)
+        stats_frame = tk.Frame(
+            self.root, bg=config.BG_MEDIUM, pady=8
+        )
         stats_frame.pack(fill=tk.X)
 
-        self.stat_clients = self._stat_box(stats_frame, "КЛИЕНТОВ", "0")
-        self.stat_messages = self._stat_box(stats_frame, "СООБЩЕНИЙ", "0")
-        self.stat_uptime = self._stat_box(stats_frame, "АПТАЙМ", "00:00:00")
+        self.stat_clients  = self._stat_box(
+            stats_frame, "КЛИЕНТОВ", "0"
+        )
+        self.stat_messages = self._stat_box(
+            stats_frame, "СООБЩЕНИЙ", "0"
+        )
+        self.stat_uptime   = self._stat_box(
+            stats_frame, "АПТАЙМ", "00:00:00"
+        )
 
         log_frame = tk.Frame(self.root, bg=config.BG_DARK)
         log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -288,7 +309,9 @@ class ServerGUI:
         )
         self.log_box.pack(fill=tk.BOTH, expand=True)
 
-        btn_frame = tk.Frame(self.root, bg=config.BG_DARK, pady=8)
+        btn_frame = tk.Frame(
+            self.root, bg=config.BG_DARK, pady=8
+        )
         btn_frame.pack(fill=tk.X, padx=10)
 
         self.start_btn = tk.Button(
@@ -326,7 +349,9 @@ class ServerGUI:
         ).pack(side=tk.RIGHT, padx=10)
 
     def _stat_box(self, parent, label, value):
-        frame = tk.Frame(parent, bg=config.BG_LIGHT, padx=20, pady=5)
+        frame = tk.Frame(
+            parent, bg=config.BG_LIGHT, padx=20, pady=5
+        )
         frame.pack(side=tk.LEFT, padx=10, pady=5, ipadx=10)
         tk.Label(
             frame, text=label,
@@ -382,7 +407,9 @@ class ServerGUI:
         stats = self.server.get_stats()
         self.stat_clients.config(text=str(stats["clients"]))
         self.stat_messages.config(text=str(stats["messages"]))
-        self.stat_uptime.config(text=stats["uptime"] or "00:00:00")
+        self.stat_uptime.config(
+            text=stats["uptime"] or "00:00:00"
+        )
         self.root.after(1000, self._update_stats)
 
     def _on_close(self):

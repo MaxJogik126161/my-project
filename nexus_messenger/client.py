@@ -10,10 +10,10 @@ import config
 
 class ChatHistory:
     def __init__(self, username):
-        self.username  = username
-        self.filepath  = f"history_{username}.json"
-        self.messages  = []
-        self._lock     = threading.Lock()
+        self.username = username
+        self.filepath = f"history_{username}.json"
+        self.messages = []
+        self._lock    = threading.Lock()
         self._load()
 
     def _load(self):
@@ -54,12 +54,12 @@ class ChatHistory:
 
     def add_private(self, pkt):
         entry = {
-            "type":     "private",
-            "from":     pkt.get("from", "?"),
-            "to":       pkt.get("to", "?"),
-            "text":     pkt.get("text", ""),
-            "time":     pkt.get("time", ""),
-            "date":     datetime.now().strftime("%Y-%m-%d")
+            "type": "private",
+            "from": pkt.get("from", "?"),
+            "to":   pkt.get("to", "?"),
+            "text": pkt.get("text", ""),
+            "time": pkt.get("time", ""),
+            "date": datetime.now().strftime("%Y-%m-%d")
         }
         with self._lock:
             self.messages.append(entry)
@@ -96,7 +96,6 @@ class HistoryWindow:
     def __init__(self, parent, history: ChatHistory, username: str):
         self.history  = history
         self.username = username
-        self.parent   = parent
 
         self.win = tk.Toplevel(parent)
         self.win.title("📜 История чата — Nexus")
@@ -138,15 +137,14 @@ class HistoryWindow:
 
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", self._on_filter)
-        search_entry = tk.Entry(
+        tk.Entry(
             filter_frame,
             textvariable=self.search_var,
             bg=config.INPUT_BG, fg=config.TEXT_PRIMARY,
             insertbackground=config.TEXT_PRIMARY,
             font=("Consolas", 11),
             relief=tk.FLAT, bd=4, width=22
-        )
-        search_entry.pack(side=tk.LEFT, padx=4)
+        ).pack(side=tk.LEFT, padx=4)
 
         tk.Label(
             filter_frame, text="Тип:",
@@ -155,23 +153,22 @@ class HistoryWindow:
         ).pack(side=tk.LEFT, padx=(12, 2))
 
         self.type_var = tk.StringVar(value="Все")
-        type_menu = tk.OptionMenu(
+        opt = tk.OptionMenu(
             filter_frame, self.type_var,
             "Все", "Сообщения", "Личные", "Системные",
             command=lambda _: self._on_filter()
         )
-        type_menu.config(
+        opt.config(
             bg=config.BG_LIGHT, fg=config.TEXT_PRIMARY,
-            font=("Consolas", 9),
-            relief=tk.FLAT, bd=0,
+            font=("Consolas", 9), relief=tk.FLAT, bd=0,
             activebackground=config.ACCENT,
             highlightthickness=0
         )
-        type_menu["menu"].config(
+        opt["menu"].config(
             bg=config.BG_LIGHT, fg=config.TEXT_PRIMARY,
             font=("Consolas", 9)
         )
-        type_menu.pack(side=tk.LEFT, padx=4)
+        opt.pack(side=tk.LEFT, padx=4)
 
         tk.Button(
             filter_frame, text="✕ Сброс",
@@ -190,12 +187,12 @@ class HistoryWindow:
             text_frame,
             bg=config.BG_DARK, fg=config.TEXT_PRIMARY,
             font=("Consolas", 10),
-            relief=tk.FLAT,
-            state=tk.DISABLED,
-            wrap=tk.WORD,
-            padx=10, pady=6
+            relief=tk.FLAT, state=tk.DISABLED,
+            wrap=tk.WORD, padx=10, pady=6
         )
-        self.text_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.text_box.pack(
+            side=tk.LEFT, fill=tk.BOTH, expand=True
+        )
 
         sb = tk.Scrollbar(
             text_frame,
@@ -207,8 +204,7 @@ class HistoryWindow:
 
         self.text_box.tag_configure(
             "date_sep", foreground=config.TEXT_MUTED,
-            font=("Consolas", 9, "italic"),
-            justify="center"
+            font=("Consolas", 9, "italic"), justify="center"
         )
         self.text_box.tag_configure(
             "own_name", foreground=config.ACCENT,
@@ -244,11 +240,12 @@ class HistoryWindow:
         )
         self.text_box.tag_configure(
             "empty", foreground=config.TEXT_MUTED,
-            font=("Consolas", 11, "italic"),
-            justify="center"
+            font=("Consolas", 11, "italic"), justify="center"
         )
 
-        btn_frame = tk.Frame(self.win, bg=config.BG_DARK, pady=6)
+        btn_frame = tk.Frame(
+            self.win, bg=config.BG_DARK, pady=6
+        )
         btn_frame.pack(fill=tk.X, padx=8)
 
         tk.Button(
@@ -283,35 +280,32 @@ class HistoryWindow:
             command=self.win.destroy
         ).pack(side=tk.RIGHT, padx=4)
 
-        self.path_lbl = tk.Label(
+        tk.Label(
             self.win,
             text=f"📁 {self.history.get_filepath()}",
             bg=config.BG_DARK, fg=config.TEXT_MUTED,
-            font=("Consolas", 8),
-            anchor=tk.W
-        )
-        self.path_lbl.pack(fill=tk.X, padx=10, pady=(0, 4))
+            font=("Consolas", 8), anchor=tk.W
+        ).pack(fill=tk.X, padx=10, pady=(0, 4))
 
     def _load_messages(self, search="", msg_type="Все"):
         messages = self.history.get_all()
-
         filtered = []
         for m in messages:
             t = m.get("type", "")
             if msg_type == "Сообщения" and t != "message":
                 continue
-            if msg_type == "Личные" and t != "private":
+            if msg_type == "Личные"    and t != "private":
                 continue
             if msg_type == "Системные" and t != "system":
                 continue
-
             if search:
-                text = m.get("text", "").lower()
-                uname = m.get("username", m.get("from", "")).lower()
+                text  = m.get("text", "").lower()
+                uname = m.get(
+                    "username", m.get("from", "")
+                ).lower()
                 if search.lower() not in text and \
                    search.lower() not in uname:
                     continue
-
             filtered.append(m)
 
         self._render(filtered, search)
@@ -335,10 +329,9 @@ class HistoryWindow:
             return
 
         prev_date = None
-
         for m in messages:
-            date = m.get("date", "")
-            time = m.get("time", "")
+            date  = m.get("date", "")
+            time  = m.get("time", "")
             mtype = m.get("type", "message")
 
             if date and date != prev_date:
@@ -352,13 +345,15 @@ class HistoryWindow:
             if mtype == "message":
                 uname = m.get("username", "?")
                 text  = m.get("text", "")
-                tag   = "own_name" if uname == self.username \
-                        else "other_name"
-                self.text_box.insert(tk.END, f"  {uname}", tag)
+                tag   = "own_name" \
+                    if uname == self.username else "other_name"
+                self.text_box.insert(
+                    tk.END, f"  {uname}", tag
+                )
                 self.text_box.insert(
                     tk.END, f"  {time}\n", "time"
                 )
-                self._insert_with_highlight(
+                self._insert_highlighted(
                     f"  {text}\n", "msg_text", highlight
                 )
 
@@ -373,7 +368,7 @@ class HistoryWindow:
                     f"  🔒 {direction}  {time}\n",
                     "private_label"
                 )
-                self._insert_with_highlight(
+                self._insert_highlighted(
                     f"  {text}\n", "private_text", highlight
                 )
 
@@ -388,17 +383,15 @@ class HistoryWindow:
         self.text_box.config(state=tk.DISABLED)
         self.text_box.see(tk.END)
 
-    def _insert_with_highlight(self, text, base_tag, keyword):
+    def _insert_highlighted(self, text, base_tag, keyword):
         if not keyword:
             self.text_box.insert(tk.END, text, base_tag)
             return
-
-        lower_text    = text.lower()
-        lower_keyword = keyword.lower()
+        lower_text = text.lower()
+        lower_kw   = keyword.lower()
         start = 0
-
         while True:
-            idx = lower_text.find(lower_keyword, start)
+            idx = lower_text.find(lower_kw, start)
             if idx == -1:
                 self.text_box.insert(
                     tk.END, text[start:], base_tag
@@ -431,15 +424,16 @@ class HistoryWindow:
             os.startfile(path)
         else:
             messagebox.showinfo(
-                "Файл не найден",
-                "История ещё не сохранена"
+                "Файл не найден", "История ещё не сохранена"
             )
 
     def _export_txt(self):
         path = filedialog.asksaveasfilename(
             parent=self.win,
             defaultextension=".txt",
-            filetypes=[("Text files", "*.txt"), ("All", "*.*")],
+            filetypes=[
+                ("Text files", "*.txt"), ("All", "*.*")
+            ],
             initialfile=f"nexus_history_{self.username}.txt"
         )
         if not path:
@@ -459,14 +453,13 @@ class HistoryWindow:
                     date  = m.get("date", "")
                     time  = m.get("time", "")
                     mtype = m.get("type", "")
-
                     if date != prev_date:
                         f.write(f"\n── {date} ──\n")
                         prev_date = date
-
                     if mtype == "message":
                         f.write(
-                            f"[{time}] {m.get('username','?')}: "
+                            f"[{time}] "
+                            f"{m.get('username','?')}: "
                             f"{m.get('text','')}\n"
                         )
                     elif mtype == "private":
@@ -478,7 +471,8 @@ class HistoryWindow:
                         )
                     elif mtype == "system":
                         f.write(
-                            f"[{time}] *** {m.get('text','')} ***\n"
+                            f"[{time}] *** "
+                            f"{m.get('text','')} ***\n"
                         )
             messagebox.showinfo(
                 "Экспорт завершён",
@@ -502,7 +496,8 @@ class HistoryWindow:
 
 class NexusClient:
     def __init__(self, on_message, on_system, on_userlist,
-                 on_connect, on_disconnect, on_error, on_private):
+                 on_connect, on_disconnect, on_error,
+                 on_private, on_typing):
         self.on_message    = on_message
         self.on_system     = on_system
         self.on_userlist   = on_userlist
@@ -510,9 +505,10 @@ class NexusClient:
         self.on_disconnect = on_disconnect
         self.on_error      = on_error
         self.on_private    = on_private
+        self.on_typing     = on_typing
 
-        self.sock     = None
-        self.username = None
+        self.sock      = None
+        self.username  = None
         self.connected = False
 
     def connect(self, username):
@@ -576,6 +572,8 @@ class NexusClient:
             self.on_userlist(pkt.get("users", []))
         elif t == "private":
             self.on_private(pkt)
+        elif t == "typing":
+            self.on_typing(pkt)
 
     def _send(self, data):
         try:
@@ -590,6 +588,9 @@ class NexusClient:
     def send_private(self, to, text):
         self._send({"type": "private", "to": to, "text": text})
 
+    def send_typing(self, is_typing: bool):
+        self._send({"type": "typing", "is_typing": is_typing})
+
     def disconnect(self):
         self.connected = False
         try:
@@ -599,16 +600,15 @@ class NexusClient:
 
 class TitleNotifier:
     BLINK_INTERVAL = 600
-    MAX_BLINKS     = 999
 
     def __init__(self, root, base_title):
-        self.root        = root
-        self.base_title  = base_title
-        self._blinking   = False
-        self._blink_job  = None
+        self.root         = root
+        self.base_title   = base_title
+        self._blinking    = False
+        self._blink_job   = None
         self._blink_state = False
-        self._pending    = 0
-        self._focused    = True
+        self._pending     = 0
+        self._focused     = True
 
         self.root.bind("<FocusIn>",  self._on_focus_in)
         self.root.bind("<FocusOut>", self._on_focus_out)
@@ -619,7 +619,7 @@ class TitleNotifier:
         self._pending += 1
         self._alt_title = f"({self._pending}) {text}"
         if not self._blinking:
-            self._blinking   = True
+            self._blinking    = True
             self._blink_state = False
             self._do_blink()
 
@@ -637,10 +637,11 @@ class TitleNotifier:
     def _do_blink(self):
         if not self._blinking:
             return
-        if self._blink_state:
-            self.root.title(self.base_title)
-        else:
-            self.root.title(self._alt_title)
+        self.root.title(
+            self.base_title
+            if self._blink_state
+            else self._alt_title
+        )
         self._blink_state = not self._blink_state
         self._blink_job = self.root.after(
             self.BLINK_INTERVAL, self._do_blink
@@ -664,6 +665,75 @@ class TitleNotifier:
 
     def _on_focus_out(self, event):
         self._focused = False
+
+class TypingIndicator:
+    TIMEOUT = 4000
+
+    def __init__(self, label: tk.Label):
+        self.label    = label
+        self._users   = {}
+        self._root    = label.winfo_toplevel()
+
+    def set_typing(self, username: bool, is_typing: bool):
+        if is_typing:
+            self._add(username)
+        else:
+            self._remove(username)
+
+    def remove_user(self, username):
+        self._remove(username)
+
+    def clear(self):
+        for job in self._users.values():
+            try:
+                self._root.after_cancel(job)
+            except Exception:
+                pass
+        self._users.clear()
+        self._update_label()
+
+    def _add(self, username):
+        if username in self._users:
+            try:
+                self._root.after_cancel(self._users[username])
+            except Exception:
+                pass
+
+        job = self._root.after(
+            self.TIMEOUT,
+            lambda u=username: self._remove(u)
+        )
+        self._users[username] = job
+        self._update_label()
+
+    def _remove(self, username):
+        if username in self._users:
+            try:
+                self._root.after_cancel(self._users[username])
+            except Exception:
+                pass
+            del self._users[username]
+        self._update_label()
+
+    def _update_label(self):
+        users = list(self._users.keys())
+
+        if not users:
+            self.label.config(text="")
+            return
+
+        if len(users) == 1:
+            text = f"✏ {users[0]} печатает..."
+        elif len(users) == 2:
+            text = f"✏ {users[0]} и {users[1]} печатают..."
+        else:
+            rest = len(users) - 2
+            text = (
+                f"✏ {users[0]}, {users[1]} "
+                f"и ещё {rest} печатают..."
+            )
+
+        self.label.config(text=text)
 
 class EmojiPicker:
     EMOJIS = [
@@ -802,19 +872,17 @@ class EmojiPicker:
             command=self._close
         ).pack(side=tk.RIGHT, padx=4)
 
-        search_frame = tk.Frame(
-            self.win, bg=config.BG_MEDIUM, pady=4
-        )
-        search_frame.pack(fill=tk.X, padx=6)
+        sf = tk.Frame(self.win, bg=config.BG_MEDIUM, pady=4)
+        sf.pack(fill=tk.X, padx=6)
 
         tk.Label(
-            search_frame, text="🔍",
+            sf, text="🔍",
             bg=config.BG_MEDIUM, fg=config.TEXT_MUTED,
             font=("Consolas", 11)
         ).pack(side=tk.LEFT, padx=(0, 4))
 
         self.search_entry = tk.Entry(
-            search_frame,
+            sf,
             textvariable=self.search_var,
             bg=config.INPUT_BG, fg=config.TEXT_PRIMARY,
             insertbackground=config.TEXT_PRIMARY,
@@ -830,32 +898,29 @@ class EmojiPicker:
         self.cat_frame.pack(fill=tk.X)
 
         self.cat_buttons = []
-        for i, (name, start, end) in enumerate(self.CATEGORIES):
+        for i, (name, _, __) in enumerate(self.CATEGORIES):
             icon = name.split()[0]
             btn = tk.Button(
-                self.cat_frame,
-                text=icon,
-                bg=config.BG_DARK,
-                fg=config.TEXT_PRIMARY,
+                self.cat_frame, text=icon,
+                bg=config.BG_DARK, fg=config.TEXT_PRIMARY,
                 font=("Segoe UI Emoji", 13),
-                relief=tk.FLAT,
-                padx=4, pady=2,
+                relief=tk.FLAT, padx=4, pady=2,
                 command=lambda idx=i: self._select_category(idx)
             )
             btn.pack(side=tk.LEFT, padx=1, pady=2)
             self.cat_buttons.append(btn)
 
         grid_outer = tk.Frame(self.win, bg=config.BG_MEDIUM)
-        grid_outer.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        grid_outer.pack(
+            fill=tk.BOTH, expand=True, padx=4, pady=4
+        )
 
         canvas = tk.Canvas(
-            grid_outer,
-            bg=config.BG_MEDIUM,
+            grid_outer, bg=config.BG_MEDIUM,
             highlightthickness=0
         )
         scrollbar = tk.Scrollbar(
-            grid_outer,
-            orient=tk.VERTICAL,
+            grid_outer, orient=tk.VERTICAL,
             command=canvas.yview,
             bg=config.SCROLLBAR_BG
         )
@@ -863,7 +928,7 @@ class EmojiPicker:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.grid_frame = tk.Frame(canvas, bg=config.BG_MEDIUM)
+        self.grid_frame  = tk.Frame(canvas, bg=config.BG_MEDIUM)
         self.grid_window = canvas.create_window(
             (0, 0), window=self.grid_frame, anchor=tk.NW
         )
@@ -907,21 +972,16 @@ class EmojiPicker:
             self._select_category(self.current_category)
             return
         filtered = [e for e in self.EMOJIS if query in e]
-        if not filtered:
-            filtered = self.EMOJIS
-        self._fill_grid(filtered)
+        self._fill_grid(filtered if filtered else self.EMOJIS)
 
     def _fill_grid(self, emojis):
-        for widget in self.grid_frame.winfo_children():
-            widget.destroy()
+        for w in self.grid_frame.winfo_children():
+            w.destroy()
 
         cols = 10
         for i, emoji in enumerate(emojis):
-            row = i // cols
-            col = i % cols
             btn = tk.Button(
-                self.grid_frame,
-                text=emoji,
+                self.grid_frame, text=emoji,
                 bg=config.BG_MEDIUM,
                 activebackground=config.BG_LIGHT,
                 relief=tk.FLAT,
@@ -929,7 +989,10 @@ class EmojiPicker:
                 width=2, pady=2,
                 command=lambda e=emoji: self._pick(e)
             )
-            btn.grid(row=row, column=col, padx=1, pady=1)
+            btn.grid(
+                row=i // cols, column=i % cols,
+                padx=1, pady=1
+            )
             btn.bind(
                 "<Enter>",
                 lambda ev, b=btn: b.config(bg=config.BG_LIGHT)
@@ -956,8 +1019,7 @@ class EmojiPicker:
     def _check_focus(self):
         try:
             if self.win and self.win.winfo_exists():
-                focused = self.win.focus_get()
-                if focused is None:
+                if self.win.focus_get() is None:
                     self._close()
         except Exception:
             pass
@@ -981,7 +1043,7 @@ class LoginWindow:
         ).pack(pady=(25, 0))
 
         tk.Label(
-            self.win, text="Messenger v0.4",
+            self.win, text="Messenger v0.5",
             bg=config.BG_DARK, fg=config.TEXT_MUTED,
             font=("Consolas", 10)
         ).pack()
@@ -999,8 +1061,7 @@ class LoginWindow:
             bg=config.INPUT_BG, fg=config.TEXT_PRIMARY,
             insertbackground=config.TEXT_PRIMARY,
             font=("Consolas", 12),
-            relief=tk.FLAT,
-            width=24, bd=6
+            relief=tk.FLAT, width=24, bd=6
         )
         entry.pack()
         entry.focus()
@@ -1043,6 +1104,9 @@ class LoginWindow:
         self.err_lbl.config(text=msg)
 
 class ChatWindow:
+    TYPING_SEND_DELAY  = 300
+    TYPING_STOP_DELAY  = 2000
+
     def __init__(self, root, username, client):
         self.root           = root
         self.username       = username
@@ -1050,6 +1114,9 @@ class ChatWindow:
         self.private_target = None
         self.message_count  = 0
         self.emoji_picker   = None
+
+        self._is_typing      = False
+        self._typing_job     = None
 
         self._base_title = f"Nexus Messenger — {username}"
         self.root.title(self._base_title)
@@ -1060,9 +1127,11 @@ class ChatWindow:
         self.history = ChatHistory(username)
 
         self._build_ui()
-        self.notifier = TitleNotifier(self.root, self._base_title)
-        self._sys_msg(f"✅ Подключён как {username}")
 
+        self.notifier = TitleNotifier(self.root, self._base_title)
+        self.typing   = TypingIndicator(self.typing_label)
+
+        self._sys_msg(f"✅ Подключён как {username}")
         count = self.history.get_count()
         if count > 0:
             self._sys_msg(
@@ -1152,8 +1221,7 @@ class ChatWindow:
             users_frame,
             text="2×ЛКМ — личное сообщение",
             bg=config.BG_MEDIUM, fg=config.TEXT_MUTED,
-            font=("Consolas", 7),
-            wraplength=160
+            font=("Consolas", 7), wraplength=160
         ).pack(pady=(0, 8), padx=5)
 
         chat_frame = tk.Frame(main, bg=config.BG_DARK)
@@ -1163,10 +1231,8 @@ class ChatWindow:
             chat_frame,
             bg=config.BG_DARK, fg=config.TEXT_PRIMARY,
             font=("Consolas", 11),
-            relief=tk.FLAT,
-            state=tk.DISABLED,
-            wrap=tk.WORD,
-            padx=10, pady=8,
+            relief=tk.FLAT, state=tk.DISABLED,
+            wrap=tk.WORD, padx=10, pady=8,
             cursor="arrow"
         )
         self.chat_box.pack(fill=tk.BOTH, expand=True)
@@ -1205,16 +1271,25 @@ class ChatWindow:
         )
 
         sb = tk.Scrollbar(
-            chat_frame,
-            command=self.chat_box.yview,
+            chat_frame, command=self.chat_box.yview,
             bg=config.SCROLLBAR_BG
         )
         self.chat_box.configure(yscrollcommand=sb.set)
 
+        self.typing_label = tk.Label(
+            self.root, text="",
+            bg=config.BG_DARK, fg="#9c88ff",
+            font=("Consolas", 9, "italic"),
+            anchor=tk.W
+        )
+        self.typing_label.pack(
+            fill=tk.X, padx=16, pady=(2, 0)
+        )
+
         input_frame = tk.Frame(
             self.root, bg=config.BG_MEDIUM, pady=8
         )
-        input_frame.pack(fill=tk.X, padx=10, pady=6)
+        input_frame.pack(fill=tk.X, padx=10, pady=(2, 6))
 
         self.pm_indicator = tk.Label(
             input_frame, text="",
@@ -1252,6 +1327,9 @@ class ChatWindow:
         self.input_entry.bind(
             "<Escape>", lambda e: self._cancel_pm()
         )
+        self.input_entry.bind(
+            "<KeyRelease>", self._on_key_release
+        )
         self.input_entry.focus()
 
         tk.Button(
@@ -1285,6 +1363,48 @@ class ChatWindow:
             on_select=self._insert_emoji
         )
 
+    def _on_key_release(self, event):
+        if event.keysym in (
+            "Return", "Escape", "Tab",
+            "Up", "Down", "Left", "Right"
+        ):
+            return
+
+        text = self.input_var.get().strip()
+
+        if text:
+            self._start_typing()
+        else:
+            self._stop_typing()
+
+    def _start_typing(self):
+        if not self._is_typing:
+            self._is_typing = True
+            self.client.send_typing(True)
+
+        if self._typing_job is not None:
+            try:
+                self.root.after_cancel(self._typing_job)
+            except Exception:
+                pass
+
+        self._typing_job = self.root.after(
+            self.TYPING_STOP_DELAY,
+            self._stop_typing
+        )
+
+    def _stop_typing(self):
+        if self._typing_job is not None:
+            try:
+                self.root.after_cancel(self._typing_job)
+            except Exception:
+                pass
+            self._typing_job = None
+
+        if self._is_typing:
+            self._is_typing = False
+            self.client.send_typing(False)
+
     def _open_history(self):
         HistoryWindow(self.root, self.history, self.username)
 
@@ -1293,10 +1413,8 @@ class ChatWindow:
 
     def _insert_emoji(self, emoji):
         pos = self.input_entry.index(tk.INSERT)
-        current = self.input_var.get()
-        self.input_var.set(
-            current[:pos] + emoji + current[pos:]
-        )
+        cur = self.input_var.get()
+        self.input_var.set(cur[:pos] + emoji + cur[pos:])
         self.input_entry.icursor(pos + len(emoji))
         self.input_entry.focus()
 
@@ -1305,6 +1423,8 @@ class ChatWindow:
         text   = pkt.get("text", "")
         ts     = pkt.get("time", "")
         is_own = (uname == self.username)
+
+        self.typing.remove_user(uname)
 
         self.history.add_message(pkt)
 
@@ -1322,14 +1442,8 @@ class ChatWindow:
 
         self.chat_box.insert(tk.END, f"  {ts}\n", "time")
 
-        if is_own:
-            self.chat_box.insert(
-                tk.END, f"  {text}\n", "msg_own"
-            )
-        else:
-            self.chat_box.insert(
-                tk.END, f"  {text}\n", "msg_other"
-            )
+        tag = "msg_own" if is_own else "msg_other"
+        self.chat_box.insert(tk.END, f"  {text}\n", tag)
 
         self.chat_box.config(state=tk.DISABLED)
         self.chat_box.see(tk.END)
@@ -1355,8 +1469,7 @@ class ChatWindow:
 
         direction = (
             f"ЛС от {frm}"
-            if frm != self.username
-            else f"ЛС → {to}"
+            if frm != self.username else f"ЛС → {to}"
         )
         self.chat_box.insert(
             tk.END,
@@ -1372,9 +1485,14 @@ class ChatWindow:
         if frm != self.username:
             self.notifier.notify_pm(frm)
 
+    def on_typing_received(self, pkt):
+        uname     = pkt.get("username", "")
+        is_typing = pkt.get("is_typing", False)
+        if uname and uname != self.username:
+            self.typing.set_typing(uname, is_typing)
+
     def _sys_msg(self, text):
         self.history.add_system(text)
-
         self.chat_box.config(state=tk.NORMAL)
         self.chat_box.insert(
             tk.END, f"\n  ─── {text} ───\n", "system"
@@ -1398,6 +1516,8 @@ class ChatWindow:
                 "Слишком длинное сообщение (макс. 500)"
             )
             return
+
+        self._stop_typing()
 
         if self.private_target:
             self.client.send_private(self.private_target, text)
@@ -1438,9 +1558,12 @@ class ChatWindow:
         self.status_var.set("Соединение потеряно")
         self.input_entry.config(state=tk.DISABLED)
         self.notifier.stop()
+        self.typing.clear()
 
     def _on_close(self):
+        self._stop_typing()
         self.notifier.stop()
+        self.typing.clear()
         if self.emoji_picker:
             self.emoji_picker._close()
         self.client.disconnect()
@@ -1467,7 +1590,8 @@ class NexusApp:
             on_connect    = self._on_connect,
             on_disconnect = self._on_disconnect,
             on_error      = self._on_error,
-            on_private    = self._on_private
+            on_private    = self._on_private,
+            on_typing     = self._on_typing
         )
         try:
             self.client.connect(username)
@@ -1512,6 +1636,13 @@ class NexusApp:
         if self.chat_win:
             self.root.after(
                 0, lambda: self.chat_win.add_private(pkt)
+            )
+
+    def _on_typing(self, pkt):
+        if self.chat_win:
+            self.root.after(
+                0,
+                lambda: self.chat_win.on_typing_received(pkt)
             )
 
     def _on_disconnect(self):
